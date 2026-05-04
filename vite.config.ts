@@ -2,8 +2,6 @@ import path from "path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-const __dirname = import.meta.dirname;
-
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -17,9 +15,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@contracts": path.resolve(__dirname, "./contracts"),
-      "@db": path.resolve(__dirname, "./db"),
+      "@": path.resolve(process.cwd(), "./src"),
+      "@contracts": path.resolve(process.cwd(), "./contracts"),
+      "@db": path.resolve(process.cwd(), "./db"),
     },
   },
 });
