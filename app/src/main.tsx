@@ -1,0 +1,21 @@
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router'
+import './index.css'
+import { TRPCProvider } from "@/providers/trpc"
+import { ThemeProvider } from "@/contexts/theme-context"
+import { Toaster } from "@/components/ui/sonner"
+import App from './App.tsx'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <BrowserRouter>
+      <TRPCProvider>
+        <ThemeProvider>
+          <App />
+          <Toaster position="bottom-right" richColors />
+        </ThemeProvider>
+      </TRPCProvider>
+    </BrowserRouter>
+  </StrictMode>,
+)

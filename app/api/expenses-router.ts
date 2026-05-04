@@ -1,0 +1,179 @@
+import { z } from "zod";
+import { createRouter, authedQuery } from "./middleware";
+import { getDb } from "./queries/connection";
+import * as schema from "@db/schema";
+import { eq, desc, gte, lte, and, sql } from "drizzle-orm";
+
+export const expensesRouter = createRouter({
+  list: authedQuery.query(async () => {
+    const db = getDb();
+    return db.select().from(schema.expenses).orderBy(desc(schema.expenses.dateTime));
+  }),
+
+  listByDateRange: authedQuery
+    .input(z.object({ from: z.string(), to: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      return db
+        .select()
+        .from(schema.expenses)
+        .where(
+          and(
+            gte(schema.expenses.dateTime, new Date(input.from)),
+            lte(schema.expenses.dateTime, new Date(input.to))
+          )
+        )
+        .orderBy(desc(schema.expenses.dateTime));
+    }),
+
+  create: authedQuery
+    .input(
+      z.object({
+        name: z.string().min(1),
+        amount: z.number(),
+        category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
+        paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
+        paidTo: z.string().optional(),
+        receiptUrl: z.string().optional(),
+        dateTime: z.string(),
+        note: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      await db.insert(schema.expenses).values({
+        name: input.name,
+        amount: input.amount.toFixed(2),
+        category: input.category,
+        paymentMethod: input.paymentMethod,
+        paidTo: input.paidTo || null,
+        receiptUrl: input.receiptUrl || null,
+        dateTime: new Date(input.dateTime),
+        note: input.note || null,
+        createdBy: ctx.user.id,
+      });
+      return { success: true };
+    }),
+
+  delete: authedQuery
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await db.delete(schema.expenses).where(eq(schema.expenses.id, input.id));
+      return { success: true };
+    }),
+
+  todaySummary: authedQuery.query(async () => {
+    const db = getDb();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const rows = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(schema.expenses)
+      .where(gte(schema.expenses.dateTime, today));
+    return rows[0];
+  }),
+
+  summaryByDateRange: authedQuery
+    .input(z.object({ from: z.string(), to: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const rows = await db
+        .select({
+          total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(schema.expenses)
+        .where(
+          and(
+            gte(schema.expenses.dateTime, new Date(input.from)),
+            lte(schema.expenses.dateTime, new Date(input.to))
+          )
+        );
+      return rows[0];
+    }),
+
+  dailyBreakdown: authedQuery
+    .input(z.object({ from: z.string(), to: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const rows = await db
+        .select({
+          date: sql<string>`DATE(${schema.expenses.dateTime})`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(schema.expenses)
+        .where(
+          and(
+            gte(schema.expenses.dateTime, new Date(input.from)),
+            lte(schema.expenses.dateTime, new Date(input.to))
+          )
+        )
+        .groupBy(sql`DATE(${schema.expenses.dateTime})`)
+        .orderBy(sql`DATE(${schema.expenses.dateTime})`);
+      return rows;
+    }),
+
+  monthlyBreakdown: authedQuery
+    .input(z.object({ year: z.number() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const from = new Date(input.year, 0, 1);
+      const to = new Date(input.year + 1, 0, 1);
+      const rows = await db
+        .select({
+          month: sql<number>`MONTH(${schema.expenses.dateTime})`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(schema.expenses)
+        .where(
+          and(
+            gte(schema.expenses.dateTime, from),
+            lte(schema.expenses.dateTime, to)
+          )
+        )
+        .groupBy(sql`MONTH(${schema.expenses.dateTime})`)
+        .orderBy(sql`MONTH(${schema.expenses.dateTime})`);
+      return rows;
+    }),
+
+  yearlyBreakdown: authedQuery.query(async () => {
+    const db = getDb();
+    const rows = await db
+      .select({
+        year: sql<number>`YEAR(${schema.expenses.dateTime})`,
+        total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(schema.expenses)
+      .groupBy(sql`YEAR(${schema.expenses.dateTime})`)
+      .orderBy(sql`YEAR(${schema.expenses.dateTime})`);
+      return rows;
+    }),
+
+  categoryBreakdown: authedQuery
+    .input(z.object({ from: z.string(), to: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const rows = await db
+        .select({
+          category: schema.expenses.category,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(schema.expenses)
+        .where(
+          and(
+            gte(schema.expenses.dateTime, new Date(input.from)),
+            lte(schema.expenses.dateTime, new Date(input.to))
+          )
+        )
+        .groupBy(schema.expenses.category);
+      return rows;
+    }),
+});

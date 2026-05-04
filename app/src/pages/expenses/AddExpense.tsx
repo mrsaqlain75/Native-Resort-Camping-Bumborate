@@ -1,0 +1,197 @@
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { trpc } from "@/providers/trpc";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DollarSign } from "lucide-react";
+import { toast } from "sonner";
+
+const expenseSchema = z.object({
+  name: z.string().min(1, "Expense name is required"),
+  amount: z.number().min(0.01, "Amount must be greater than 0"),
+  category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
+  paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
+  paidTo: z.string().optional(),
+  dateTime: z.string(),
+  note: z.string().optional(),
+});
+
+type ExpenseForm = z.infer<typeof expenseSchema>;
+
+const categories = [
+  { value: "food", label: "Food" },
+  { value: "supplies", label: "Supplies" },
+  { value: "utilities", label: "Utilities" },
+  { value: "staff", label: "Staff" },
+  { value: "maintenance", label: "Maintenance" },
+  { value: "rent", label: "Rent" },
+  { value: "other", label: "Other" },
+];
+
+const paymentMethods = [
+  { value: "cash", label: "Cash" },
+  { value: "e_transaction", label: "E-Transaction" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+];
+
+export default function AddExpense() {
+  const utils = trpc.useUtils();
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<ExpenseForm>({
+    resolver: zodResolver(expenseSchema),
+    defaultValues: {
+      name: "",
+      amount: 0,
+      category: "other",
+      paymentMethod: "cash",
+      paidTo: "",
+      dateTime: new Date().toISOString().slice(0, 16),
+      note: "",
+    },
+  });
+
+  const createExpense = trpc.expenses.create.useMutation({
+    onSuccess: () => {
+      toast.success("Expense recorded successfully!");
+      utils.reports.dashboardSummary.invalidate();
+      utils.reports.recentActivity.invalidate();
+      utils.expenses.todaySummary.invalidate();
+      reset();
+      setReceiptFile(null);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const onSubmit = (data: ExpenseForm) => {
+    createExpense.mutate({
+      ...data,
+      receiptUrl: receiptFile ? `uploaded:${receiptFile.name}` : undefined,
+    });
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold font-serif">Add Expense</h1>
+        <p className="text-sm text-[var(--muted-foreground)]">Record a new business expense</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-[var(--primary)]" />
+            Expense Details
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <Label htmlFor="name">Expense Name</Label>
+                <Input id="name" {...register("name")} placeholder="e.g., Vegetable Purchase" />
+                {errors.name && <p className="text-xs text-[var(--destructive)] mt-1">{errors.name.message}</p>}
+              </div>
+              <div>
+                <Label htmlFor="amount">Amount (PKR)</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  {...register("amount", { valueAsNumber: true })}
+                  placeholder="0.00"
+                />
+                {errors.amount && <p className="text-xs text-[var(--destructive)] mt-1">{errors.amount.message}</p>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <Label>Category</Label>
+                <Select
+                  value={watch("category")}
+                  onValueChange={(v) => setValue("category", v as ExpenseForm["category"])}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Payment Method</Label>
+                <Select
+                  value={watch("paymentMethod")}
+                  onValueChange={(v) => setValue("paymentMethod", v as ExpenseForm["paymentMethod"])}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {paymentMethods.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <Label htmlFor="paidTo">Paid To</Label>
+                <Input id="paidTo" {...register("paidTo")} placeholder="Vendor name or person" />
+              </div>
+              <div>
+                <Label htmlFor="dateTime">Date & Time</Label>
+                <Input type="datetime-local" id="dateTime" {...register("dateTime")} />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="receipt">Upload Receipt (Optional)</Label>
+              <Input
+                id="receipt"
+                type="file"
+                accept="image/*,.pdf"
+                onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+              />
+              {receiptFile && <p className="text-xs text-[var(--muted-foreground)] mt-1">Selected: {receiptFile.name}</p>}
+            </div>
+
+            <div>
+              <Label htmlFor="note">Note / Remarks (Optional)</Label>
+              <Textarea id="note" {...register("note")} rows={3} />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button type="submit" className="flex-1" disabled={createExpense.isPending}>
+                {createExpense.isPending ? "Saving..." : "Record Expense"}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => reset()}>
+                Reset
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
