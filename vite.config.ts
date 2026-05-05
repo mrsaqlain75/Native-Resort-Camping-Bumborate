@@ -8,7 +8,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: process.env.VITE_API_URL || 'http://localhost:3000',
         changeOrigin: true,
       },
     },
@@ -19,5 +19,9 @@ export default defineConfig({
       "@contracts": path.resolve(process.cwd(), "./contracts"),
       "@db": path.resolve(process.cwd(), "./db"),
     },
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
   },
 });
