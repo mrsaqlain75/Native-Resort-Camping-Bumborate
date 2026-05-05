@@ -3,10 +3,5 @@
   "outputDirectory": "dist",
   "devCommand": "npm run dev",
   "installCommand": "npm install --legacy-peer-deps",
-  "framework": "vite",
-  "functions": {
-    "api/**/*.ts": {
-      "excludeFiles": "**/*.ts"
-    }
-  }
+  "framework": "vite"
 }
