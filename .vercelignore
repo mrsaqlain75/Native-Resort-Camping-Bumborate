@@ -1,0 +1,14 @@
+# Ignore TypeScript source files in build output
+api/**/*.ts
+db/**/*.ts
+contracts/**/*.ts
+src/**/*.ts
+
+# Ignore test files
+*.test.ts
+*.spec.ts
+test-*.js
+create-owner.js
+
+# Keep compiled files only
+!dist/**/*
