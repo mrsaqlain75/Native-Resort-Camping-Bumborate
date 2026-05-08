@@ -6,9 +6,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    allowedHosts: [
+      "localhost",
+      ".ngrok-free.app",
+      ".ngrok.io"
+    ],
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:3000',
+        target: 'http://localhost:3000',
         changeOrigin: true,
       },
     },
@@ -23,5 +28,6 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    cssMinify: false,  // Disable CSS minification to fix Tailwind v4 issue
   },
 });
