@@ -8,11 +8,19 @@ import type { ReactNode } from "react";
 export const trpc = createTRPCReact<AppRouter>();
 
 const queryClient = new QueryClient();
-// src/providers/trpc.tsx - Update the trpcClient
+
+const getBaseUrl = () => {
+  // Use environment variable in production, fallback to localhost in development
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  return "http://localhost:3000";
+};
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: "/api/trpc",
+      url: `${getBaseUrl()}/api/trpc`,
       transformer: superjson,
       fetch(input, init) {
         const token = localStorage.getItem("auth_token");
