@@ -41,11 +41,13 @@ app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 export default app;
 
 // Always start the server when this file is run directly
-const port = parseInt(env.port || "3000");
-console.log(`Starting server on http://localhost:${port}`);
+const port = parseInt(process.env.PORT || env.port || "3000");
+const hostname = '0.0.0.0';  // CRITICAL: Listen on all network interfaces
+
+console.log(`Starting server on http://${hostname}:${port}`);
 
 const { serve } = await import("@hono/node-server");
-serve({ fetch: app.fetch, port }, () => {
-  console.log(`✅ Server running on http://localhost:${port}`);
-  console.log(`Health check: http://localhost:${port}/health`);
+serve({ fetch: app.fetch, port, hostname }, () => {
+  console.log(`✅ Server running on http://${hostname}:${port}`);
+  console.log(`Health check: http://${hostname}:${port}/health`);
 });
