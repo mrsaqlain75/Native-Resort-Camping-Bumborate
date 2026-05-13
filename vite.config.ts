@@ -4,20 +4,6 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
-  server: {
-    port: 5173,
-    allowedHosts: [
-      "localhost",
-      ".ngrok-free.app",
-      ".ngrok.io"
-    ],
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-    },
-  },
   resolve: {
     alias: {
       "@": path.resolve(process.cwd(), "./src"),
@@ -25,9 +11,17 @@ export default defineConfig({
       "@db": path.resolve(process.cwd(), "./db"),
     },
   },
+  server: {
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    cssMinify: false,  // Disable CSS minification to fix Tailwind v4 issue
   },
 });

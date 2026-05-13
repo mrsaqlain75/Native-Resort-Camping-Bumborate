@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth } from "@/hooks/useAuth";
-import { cn } from "@/lib/utils";
+// Change from @/lib/utils to relative path
+import { cn } from "../../lib/utils";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   Sun,
@@ -85,7 +86,6 @@ export function SidebarLayout({ children, isOwner }: SidebarLayoutProps) {
   const handleNavigation = (path: string) => {
     setNavigatingTo(path);
     setMobileOpen(false);
-    // Small delay to show animation before navigation
     setTimeout(() => {
       navigate(path);
       setTimeout(() => setNavigatingTo(null), 300);
@@ -154,7 +154,6 @@ export function SidebarLayout({ children, isOwner }: SidebarLayoutProps) {
 
   return (
     <div className="min-h-screen flex">
-      {/* Mobile Overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden animate-in fade-in duration-200"
@@ -162,14 +161,12 @@ export function SidebarLayout({ children, isOwner }: SidebarLayoutProps) {
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 w-72 flex flex-col bg-[var(--sidebar)] border-r border-[var(--sidebar-border)] transition-transform duration-300 ease-in-out",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        {/* Brand */}
         <div className="p-8 border-b border-[var(--sidebar-border)]">
           <Link 
             to="/" 
@@ -194,7 +191,6 @@ export function SidebarLayout({ children, isOwner }: SidebarLayoutProps) {
           </Link>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
           <NavItem path="/" label="Dashboard" icon={LayoutDashboard} />
 
@@ -217,7 +213,6 @@ export function SidebarLayout({ children, isOwner }: SidebarLayoutProps) {
           )}
         </nav>
 
-        {/* Bottom */}
         <div className="p-3 border-t border-[var(--sidebar-border)] space-y-2">
           <div className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--muted-foreground)] group">
             <div className="h-6 w-6 rounded-full bg-[var(--accent)] flex items-center justify-center transition-transform group-hover:scale-105 duration-200">
@@ -255,9 +250,7 @@ export function SidebarLayout({ children, isOwner }: SidebarLayoutProps) {
         </div>
       </aside>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col lg:ml-72 min-w-0">
-        {/* Header */}
         <header className="sticky top-0 z-30 bg-[var(--background)]/80 backdrop-blur-md border-b border-[var(--border)] px-4 lg:px-6 py-3 flex items-center gap-4">
           <button
             onClick={() => setMobileOpen(true)}
@@ -269,7 +262,6 @@ export function SidebarLayout({ children, isOwner }: SidebarLayoutProps) {
 
           <div className="flex-1" />
 
-          {/* Global navigation loader indicator */}
           {navigatingTo && (
             <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)] animate-in fade-in duration-200">
               <LoadingSpinner size="sm" />
@@ -303,7 +295,6 @@ export function SidebarLayout({ children, isOwner }: SidebarLayoutProps) {
           </button>
         </header>
 
-        {/* Page Content with loading overlay while navigating */}
         <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
           {navigatingTo ? (
             <div className="flex flex-col items-center justify-center min-h-[400px] gap-4 animate-in fade-in duration-300">
