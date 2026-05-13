@@ -1,8 +1,7 @@
-import { Routes, Route } from 'react-router'
+import { Routes, Route, Navigate } from 'react-router'
 import { useAuth } from '@/hooks/useAuth'
 import { SidebarLayout } from '@/components/layout/SidebarLayout'
 import Login from '@/pages/Login'
-import NotFound from '@/pages/NotFound'
 import Dashboard from '@/pages/Dashboard'
 import AddSale from '@/pages/sales/AddSale'
 import AddExpense from '@/pages/expenses/AddExpense'
@@ -31,7 +30,7 @@ function AppRoutes() {
     )
   }
 
-  if (!user) return null
+  if (!user) return <Navigate to="/login" replace />
 
   const isOwner = user.role === 'admin'
 
@@ -39,6 +38,7 @@ function AppRoutes() {
     <SidebarLayout isOwner={isOwner}>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Navigate to="/" replace />} />
         <Route path="/sales/add" element={<AddSale />} />
         <Route path="/expenses/add" element={<AddExpense />} />
         <Route path="/menu" element={<MenuPage />} />
@@ -58,7 +58,7 @@ function AppRoutes() {
             <Route path="/expenses/list" element={<ExpensesPage />} />
           </>
         )}
-        <Route path="*" element={<NotFound />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </SidebarLayout>
   )
@@ -68,7 +68,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="*" element={<AppRoutes />} />
+      <Route path="/*" element={<AppRoutes />} />
     </Routes>
   )
 }
