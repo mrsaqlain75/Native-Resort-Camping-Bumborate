@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth } from "@/hooks/useAuth";
 // Change from @/lib/utils to relative path
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   Sun,

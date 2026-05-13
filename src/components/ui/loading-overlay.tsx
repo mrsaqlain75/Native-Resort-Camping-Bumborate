@@ -1,5 +1,5 @@
 import { LoadingSpinner } from "./loading-spinner";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 interface LoadingOverlayProps {
   isLoading: boolean;
