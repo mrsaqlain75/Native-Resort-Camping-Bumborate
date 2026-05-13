@@ -1,4 +1,3 @@
-// api/queries/users.ts
 import { eq } from "drizzle-orm";
 import * as schema from "@db/schema";
 import type { InsertUser, User } from "@db/schema";
@@ -45,5 +44,20 @@ export async function createOrGetOwner(): Promise<User> {
     passwordHash: hashedPassword,
     name: "Owner",
     role: "admin",
+  });
+}
+
+export async function createOrGetManager(): Promise<User> {
+  const managerEmail = env.managerEmail || "manager@nativeresort.com";
+  const existingManager = await findUserByEmail(managerEmail);
+  if (existingManager) return existingManager;
+  
+  const managerPassword = env.managerPassword || "Manager@123";
+  const hashedPassword = await hashPassword(managerPassword);
+  return createUser({
+    email: managerEmail,
+    passwordHash: hashedPassword,
+    name: "Manager",
+    role: "manager",
   });
 }

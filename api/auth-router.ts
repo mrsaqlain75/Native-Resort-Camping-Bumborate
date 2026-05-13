@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
-import { findUserByEmail, createOrGetOwner } from "./queries/users";
+import { findUserByEmail, createOrGetOwner, createOrGetManager } from "./queries/users";
 import { verifyPassword, generateToken } from "./lib/auth";
 import { ErrorMessages } from "@contracts/constants";
 
@@ -16,7 +16,9 @@ export const authRouter = createRouter({
     .mutation(async ({ input }) => {
       const { email, password } = input;
       
+      // Create users on first login attempt
       await createOrGetOwner();
+      await createOrGetManager();
       
       const user = await findUserByEmail(email);
       if (!user) {
