@@ -2,14 +2,11 @@ import path from "path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// Get the absolute path to src directory
-const srcPath = path.resolve(process.cwd(), "src");
-
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@": srcPath,
+      "@": path.resolve(process.cwd(), "src"),
       "@contracts": path.resolve(process.cwd(), "contracts"),
       "@db": path.resolve(process.cwd(), "db"),
     },
@@ -26,5 +23,6 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    cssMinify: false,  // Disable CSS minification
   },
 });
