@@ -40,9 +40,9 @@ app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
 export default app;
 
-// Always start the server when this file is run directly
-const port = parseInt(process.env.PORT || env.port || "3000");
-const hostname = '0.0.0.0';  // CRITICAL: Listen on all network interfaces
+// Force port 3000 (ignore Railway's PORT env var)
+const port = 3000;
+const hostname = '0.0.0.0';
 
 console.log(`Starting server on http://${hostname}:${port}`);
 
