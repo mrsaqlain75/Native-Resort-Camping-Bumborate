@@ -1,14 +1,14 @@
-# Ignore TypeScript source files in build output
+# Only ignore backend files
 api/**/*.ts
 db/**/*.ts
 contracts/**/*.ts
-src/**/*.ts
+
+# Do NOT ignore frontend source files
+!src/**/*.ts
+!src/**/*.tsx
 
 # Ignore test files
 *.test.ts
 *.spec.ts
 test-*.js
 create-owner.js
-
-# Keep compiled files only
-!dist/**/*
