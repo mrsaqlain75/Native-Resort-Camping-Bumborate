@@ -1,8 +1,7 @@
 import { trpc } from "@/providers/trpc";
 import { useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-// Change from @/const to relative path
-import { LOGIN_PATH } from "../const";
+import { LOGIN_PATH } from "@/lib/const";
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
