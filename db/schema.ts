@@ -21,12 +21,9 @@ export const users = mysqlTable("users", {
   name: varchar("name", { length: 255 }),
   avatar: text("avatar"),
   role: mysqlEnum("role", ["user", "admin", "manager"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt")
-    .defaultNow()
-    .notNull()
-    .$onUpdate(() => new Date()),
-  lastSignInAt: timestamp("lastSignInAt").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date()),
+  lastSignInAt: timestamp("last_sign_in_at").defaultNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -81,30 +78,14 @@ export const expenses = mysqlTable("expenses", {
 export type Expense = typeof expenses.$inferSelect;
 export type InsertExpense = typeof expenses.$inferInsert;
 
-// ========== CAMPING SPOTS TABLE ==========
-export const campingSpots = mysqlTable("camping_spots", {
-  id: serial("id").primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  capacity: int("capacity").notNull(),
-  pricePerNight: decimal("price_per_night", { precision: 12, scale: 2 }).notNull(),
-  amenities: json("amenities").$type<string[]>().notNull(),
-  description: text("description"),
-  active: mysqlEnum("active", ["yes", "no"]).default("yes").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date()),
-});
-
-export type CampingSpot = typeof campingSpots.$inferSelect;
-export type InsertCampingSpot = typeof campingSpots.$inferInsert;
-
-// ========== CAMPING SALES TABLE ==========
+// Update campingSales table
 export const campingSales = mysqlTable("camping_sales", {
   id: serial("id").primaryKey(),
-  spotId: bigint("spot_id", { mode: "number", unsigned: true }).notNull(),
   customerName: varchar("customer_name", { length: 255 }).notNull(),
   checkIn: date("check_in").notNull(),
   checkOut: date("check_out").notNull(),
   peopleCount: int("people_count").notNull(),
+  numberOfCamps: int("number_of_camps").notNull().default(1), // New field
   services: json("services").$type<{ name: string; price: number }[]>().notNull(),
   nights: int("nights").notNull(),
   spotTotal: decimal("spot_total", { precision: 12, scale: 2 }).notNull(),

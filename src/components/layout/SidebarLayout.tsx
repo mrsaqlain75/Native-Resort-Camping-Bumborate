@@ -43,7 +43,6 @@ const restaurantItems = [
 
 const campingItems = [
   { path: "/camping/sales", label: "Add Camping Sale", icon: Tent },
-  { path: "/camping/spots", label: "Camping Points", icon: MapPin },
 ];
 
 const reportItems = [

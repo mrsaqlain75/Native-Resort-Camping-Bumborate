@@ -5,75 +5,6 @@ import * as schema from "@db/schema";
 import { eq, desc, gte, lte, and, sql } from "drizzle-orm";
 
 export const campingRouter = createRouter({
-  spots: {
-    list: authedQuery.query(async () => {
-      const db = getDb();
-      return db.select().from(schema.campingSpots).where(eq(schema.campingSpots.active, "yes")).orderBy(desc(schema.campingSpots.createdAt));
-    }),
-
-    listAll: authedQuery.query(async () => {
-      const db = getDb();
-      return db.select().from(schema.campingSpots).orderBy(desc(schema.campingSpots.createdAt));
-    }),
-
-    create: authedQuery
-      .input(
-        z.object({
-          name: z.string().min(1),
-          capacity: z.number(),
-          pricePerNight: z.number(),
-          amenities: z.array(z.string()),
-          description: z.string().optional(),
-        })
-      )
-      .mutation(async ({ input }) => {
-        const db = getDb();
-        await db.insert(schema.campingSpots).values({
-          name: input.name,
-          capacity: input.capacity,
-          pricePerNight: input.pricePerNight.toFixed(2),
-          amenities: input.amenities,
-          description: input.description || null,
-        });
-        return { success: true };
-      }),
-
-    update: authedQuery
-      .input(
-        z.object({
-          id: z.number(),
-          name: z.string().min(1),
-          capacity: z.number(),
-          pricePerNight: z.number(),
-          amenities: z.array(z.string()),
-          description: z.string().optional(),
-          active: z.enum(["yes", "no"]).optional(),
-        })
-      )
-      .mutation(async ({ input }) => {
-        const db = getDb();
-        await db
-          .update(schema.campingSpots)
-          .set({
-            name: input.name,
-            capacity: input.capacity,
-            pricePerNight: input.pricePerNight.toFixed(2),
-            amenities: input.amenities,
-            description: input.description || null,
-            ...(input.active && { active: input.active }),
-          })
-          .where(eq(schema.campingSpots.id, input.id));
-        return { success: true };
-      }),
-
-    delete: authedQuery
-      .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        const db = getDb();
-        await db.update(schema.campingSpots).set({ active: "no" }).where(eq(schema.campingSpots.id, input.id));
-        return { success: true };
-      }),
-  },
 
   sales: {
     list: authedQuery.query(async () => {
@@ -100,11 +31,11 @@ export const campingRouter = createRouter({
     create: authedQuery
       .input(
         z.object({
-          spotId: z.number(),
           customerName: z.string().min(1),
           checkIn: z.string(),
           checkOut: z.string(),
           peopleCount: z.number(),
+          numberOfCamps: z.number().min(1).default(1),
           services: z.array(z.object({ name: z.string(), price: z.number() })),
           nights: z.number(),
           spotTotal: z.number(),
@@ -118,11 +49,11 @@ export const campingRouter = createRouter({
       .mutation(async ({ input, ctx }) => {
         const db = getDb();
         await db.insert(schema.campingSales).values({
-          spotId: input.spotId,
           customerName: input.customerName,
           checkIn: new Date(input.checkIn),
           checkOut: new Date(input.checkOut),
           peopleCount: input.peopleCount,
+          numberOfCamps: input.numberOfCamps,
           services: input.services,
           nights: input.nights,
           spotTotal: input.spotTotal.toFixed(2),

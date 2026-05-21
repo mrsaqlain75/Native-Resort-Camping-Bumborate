@@ -22,12 +22,14 @@ const CAMPING_SERVICES = [
   { name: "Dinner", price: 1000 },
 ];
 
+// Default price per camp per night
+const PRICE_PER_CAMP_PER_NIGHT = 500;
+
 export default function AddCampingSale() {
   const utils = trpc.useUtils();
-  const { data: spots } = trpc.camping.spots.list.useQuery();
 
   const [customerName, setCustomerName] = useState("");
-  const [spotId, setSpotId] = useState("");
+  const [numberOfCamps, setNumberOfCamps] = useState(1);
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [peopleCount, setPeopleCount] = useState(2);
@@ -38,7 +40,7 @@ export default function AddCampingSale() {
   const [receiptData, setReceiptData] = useState<{
     id: number;
     customerName: string;
-    spotName: string;
+    numberOfCamps: number;
     checkIn: string;
     checkOut: string;
     peopleCount: number;
@@ -51,9 +53,8 @@ export default function AddCampingSale() {
     dateTime: string;
   } | null>(null);
 
-  const selectedSpot = spots?.find((s) => s.id === Number(spotId));
   const nights = checkIn && checkOut ? Math.max(1, differenceInDays(new Date(checkOut), new Date(checkIn))) : 0;
-  const spotTotal = selectedSpot ? Number(selectedSpot.pricePerNight) * nights : 0;
+  const spotTotal = PRICE_PER_CAMP_PER_NIGHT * numberOfCamps * nights;
   const servicesTotal = selectedServices.reduce((sum, sName) => {
     const svc = CAMPING_SERVICES.find((s) => s.name === sName);
     return sum + (svc?.price || 0);
@@ -65,23 +66,21 @@ export default function AddCampingSale() {
       toast.success("Camping sale recorded!");
       utils.reports.dashboardSummary.invalidate();
       utils.camping.sales.list.invalidate();
-      if (selectedSpot) {
-        setReceiptData({
-          id: Date.now(),
-          customerName,
-          spotName: selectedSpot.name,
-          checkIn,
-          checkOut,
-          peopleCount,
-          nights,
-          services: selectedServices.map((sName) => ({ name: sName, price: CAMPING_SERVICES.find((s) => s.name === sName)?.price || 0 })),
-          spotTotal,
-          servicesTotal,
-          totalAmount,
-          paymentMethod,
-          dateTime,
-        });
-      }
+      setReceiptData({
+        id: Date.now(),
+        customerName,
+        numberOfCamps,
+        checkIn,
+        checkOut,
+        peopleCount,
+        nights,
+        services: selectedServices.map((sName) => ({ name: sName, price: CAMPING_SERVICES.find((s) => s.name === sName)?.price || 0 })),
+        spotTotal,
+        servicesTotal,
+        totalAmount,
+        paymentMethod,
+        dateTime,
+      });
       resetForm();
     },
     onError: (err) => toast.error(err.message),
@@ -89,7 +88,7 @@ export default function AddCampingSale() {
 
   const resetForm = () => {
     setCustomerName("");
-    setSpotId("");
+    setNumberOfCamps(1);
     setCheckIn("");
     setCheckOut("");
     setPeopleCount(2);
@@ -100,16 +99,16 @@ export default function AddCampingSale() {
   };
 
   const handleSubmit = () => {
-    if (!customerName || !spotId || !checkIn || !checkOut) {
+    if (!customerName || !checkIn || !checkOut) {
       toast.error("Please fill all required fields");
       return;
     }
     createSale.mutate({
-      spotId: Number(spotId),
       customerName,
       checkIn,
       checkOut,
       peopleCount,
+      numberOfCamps,
       services: selectedServices.map((sName) => ({ name: sName, price: CAMPING_SERVICES.find((s) => s.name === sName)?.price || 0 })),
       nights,
       spotTotal,
@@ -148,19 +147,15 @@ export default function AddCampingSale() {
               <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer full name" />
             </div>
             <div>
-              <Label>Camping Spot</Label>
-              <Select value={spotId} onValueChange={setSpotId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a spot" />
-                </SelectTrigger>
-                <SelectContent>
-                  {spots?.map((spot) => (
-                    <SelectItem key={spot.id} value={String(spot.id)}>
-                      {spot.name} — Rs. {Number(spot.pricePerNight)}/night (Capacity: {spot.capacity})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Number of Camps/Tents</Label>
+              <Input 
+                type="number" 
+                min={1} 
+                value={numberOfCamps} 
+                onChange={(e) => setNumberOfCamps(Number(e.target.value))} 
+                placeholder="Number of camps" 
+              />
+              <p className="text-xs text-muted-foreground mt-1">Price per camp per night: Rs. {PRICE_PER_CAMP_PER_NIGHT}</p>
             </div>
           </div>
 
@@ -182,7 +177,8 @@ export default function AddCampingSale() {
           {nights > 0 && (
             <div className="p-3 rounded-lg bg-[var(--muted)]/30 text-sm">
               <p>Nights: <strong>{nights}</strong></p>
-              <p>Spot Price: <strong>Rs. {spotTotal.toLocaleString()}</strong> (Rs. {selectedSpot ? Number(selectedSpot.pricePerNight).toLocaleString() : 0} x {nights})</p>
+              <p>Camps: <strong>{numberOfCamps}</strong></p>
+              <p>Spot Total: <strong>Rs. {spotTotal.toLocaleString()}</strong> (Rs. {PRICE_PER_CAMP_PER_NIGHT} x {numberOfCamps} camps x {nights} nights)</p>
             </div>
           )}
 
@@ -231,7 +227,7 @@ export default function AddCampingSale() {
           <div className="border-t border-[var(--border)] pt-4">
             <div className="flex justify-between items-center">
               <div className="space-y-1 text-sm">
-                <p>Spot Total: Rs. {spotTotal.toLocaleString()}</p>
+                <p>Camp Total: Rs. {spotTotal.toLocaleString()}</p>
                 <p>Services Total: Rs. {servicesTotal.toLocaleString()}</p>
               </div>
               <div className="text-right">
@@ -264,7 +260,7 @@ export default function AddCampingSale() {
               </div>
               <div className="text-xs space-y-1">
                 <p>Customer: {receiptData.customerName}</p>
-                <p>Spot: {receiptData.spotName}</p>
+                <p>Number of Camps: {receiptData.numberOfCamps}</p>
                 <p>Check-in: {format(new Date(receiptData.checkIn), "MMM dd, yyyy")}</p>
                 <p>Check-out: {format(new Date(receiptData.checkOut), "MMM dd, yyyy")}</p>
                 <p>Nights: {receiptData.nights} | People: {receiptData.peopleCount}</p>
@@ -279,7 +275,7 @@ export default function AddCampingSale() {
                 </thead>
                 <tbody>
                   <tr>
-                    <td className="py-1">Spot ({receiptData.nights} nights)</td>
+                    <td className="py-1">Camp ({receiptData.nights} nights x {receiptData.numberOfCamps} camps)</td>
                     <td className="text-right py-1">{receiptData.spotTotal.toLocaleString()}</td>
                   </tr>
                   {receiptData.services.map((s, i) => (
