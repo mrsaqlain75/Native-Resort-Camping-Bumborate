@@ -180,7 +180,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               <div>
                 <Label>Category</Label>
                 <Select
-                  key={`category-${expenseToEdit?.id}`}
+                  key={`category-${expenseToEdit?.id}-${expenseToEdit?.category}`}
                   value={watch("category")}
                   onValueChange={(v) => setValue("category", v as ExpenseForm["category"])}
                 >
