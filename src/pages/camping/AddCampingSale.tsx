@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,38 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
     dateTime: string;
   } | null>(null);
 
+  // Add this useEffect to populate form when editing
+useEffect(() => {
+  if (campingSaleToEdit) {
+    setCustomerName(campingSaleToEdit.customerName || "");
+    setNumberOfCamps(campingSaleToEdit.numberOfCamps || 1);
+    // Handle date formatting safely
+    const checkInValue = campingSaleToEdit.checkIn 
+      ? typeof campingSaleToEdit.checkIn === "string" 
+        ? campingSaleToEdit.checkIn.split('T')[0]
+        : new Date(campingSaleToEdit.checkIn).toISOString().split('T')[0]
+      : "";
+    const checkOutValue = campingSaleToEdit.checkOut 
+      ? typeof campingSaleToEdit.checkOut === "string" 
+        ? campingSaleToEdit.checkOut.split('T')[0]
+        : new Date(campingSaleToEdit.checkOut).toISOString().split('T')[0]
+      : "";
+    setCheckIn(checkInValue);
+    setCheckOut(checkOutValue);
+    setPeopleCount(campingSaleToEdit.peopleCount || 2);
+    setSelectedServices(campingSaleToEdit.services?.map((s: any) => s.name) || []);
+    setPaymentMethod(campingSaleToEdit.paymentMethod || "cash");
+    // Safe date handling for dateTime
+    const dateTimeValue = campingSaleToEdit.dateTime 
+      ? typeof campingSaleToEdit.dateTime === "string" 
+        ? campingSaleToEdit.dateTime.slice(0, 16)
+        : new Date(campingSaleToEdit.dateTime).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16);
+    setDateTime(dateTimeValue);
+    setNote(campingSaleToEdit.note || "");
+  }
+}, [campingSaleToEdit]);
+
   const nights = checkIn && checkOut ? Math.max(1, differenceInDays(new Date(checkOut), new Date(checkIn))) : 0;
   const spotTotal = PRICE_PER_CAMP_PER_NIGHT * numberOfCamps * nights;
   const servicesTotal = selectedServices.reduce((sum, sName) => {
@@ -104,27 +136,44 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
     setNote("");
   };
 
-  const handleSubmit = () => {
-    if (!customerName || !checkIn || !checkOut) {
-      toast.error("Please fill all required fields");
-      return;
-    }
-    createSale.mutate({
-      customerName,
-      checkIn,
-      checkOut,
-      peopleCount,
-      numberOfCamps,
-      services: selectedServices.map((sName) => ({ name: sName, price: CAMPING_SERVICES.find((s) => s.name === sName)?.price || 0 })),
-      nights,
-      spotTotal,
-      servicesTotal,
-      totalAmount,
-      paymentMethod,
-      dateTime,
-      note: note || undefined,
-    });
+const handleSubmit = () => {
+  if (!customerName || !checkIn || !checkOut) {
+    toast.error("Please fill all required fields");
+    return;
+  }
+  
+  const payload = {
+    customerName,
+    checkIn,
+    checkOut,
+    peopleCount,
+    numberOfCamps,
+    services: selectedServices.map((sName) => ({ name: sName, price: CAMPING_SERVICES.find((s) => s.name === sName)?.price || 0 })),
+    nights,
+    spotTotal,
+    servicesTotal,
+    totalAmount,
+    paymentMethod,
+    dateTime,
+    note: note || undefined,
   };
+
+  if (campingSaleToEdit) {
+    updateSale.mutate({ id: campingSaleToEdit.id, ...payload });
+  } else {
+    createSale.mutate(payload);
+  }
+};
+
+  const updateSale = trpc.camping.sales.update.useMutation({
+  onSuccess: () => {
+    toast.success("Camping sale updated successfully!");
+    utils.camping.sales.list.invalidate();
+    utils.reports.dashboardSummary.invalidate();
+    if (onClose) onClose();
+  },
+  onError: (err) => toast.error(err.message),
+});
 
   const toggleService = (name: string) => {
     setSelectedServices((prev) =>
@@ -135,8 +184,10 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold font-serif">Add Camping Sale</h1>
-        <p className="text-sm text-[var(--muted-foreground)]">Record a new camping reservation</p>
+        <h1 className="text-2xl font-bold font-serif">{campingSaleToEdit ? "Update Camping Sale" : "Add Camping Sale"}</h1>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          {campingSaleToEdit ? "Update existing camping reservation" : "Record a new camping reservation"}
+        </p>
       </div>
 
       <Card>
@@ -245,7 +296,7 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
 
           <div className="flex gap-3">
             <Button className="flex-1" onClick={handleSubmit} disabled={createSale.isPending}>
-              {createSale.isPending ? "Saving..." : "Record Camping Sale"}
+              {createSale.isPending ? "Saving..." : (campingSaleToEdit ? "Update Camping Sale" : "Record Camping Sale")}
             </Button>
             <Button variant="outline" onClick={resetForm}>Reset</Button>
           </div>

@@ -80,15 +80,21 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
   });
 
   // Populate form when editing
-  useEffect(() => {
-    if (saleToEdit) {
-      setValue("items", saleToEdit.items);
-      setValue("paymentMethod", saleToEdit.paymentMethod as "cash" | "e_transaction");
-      setValue("source", saleToEdit.source as "dine_in" | "online_order" | "other");
-      setValue("dateTime", saleToEdit.dateTime.slice(0, 16));
-      setValue("note", saleToEdit.note || "");
-    }
-  }, [saleToEdit, setValue]);
+useEffect(() => {
+  if (saleToEdit) {
+    setValue("items", saleToEdit.items);
+    setValue("paymentMethod", saleToEdit.paymentMethod as "cash" | "e_transaction");
+    setValue("source", saleToEdit.source as "dine_in" | "online_order" | "other");
+    // Safe date handling
+    const dateTimeValue = saleToEdit.dateTime 
+      ? typeof saleToEdit.dateTime === "string" 
+        ? saleToEdit.dateTime.slice(0, 16) 
+        : new Date(saleToEdit.dateTime).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16);
+    setValue("dateTime", dateTimeValue);
+    setValue("note", saleToEdit.note || "");
+  }
+}, [saleToEdit, setValue]);
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
 

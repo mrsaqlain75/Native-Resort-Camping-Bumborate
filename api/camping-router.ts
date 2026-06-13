@@ -154,7 +154,7 @@ export const campingRouter = createRouter({
         return rows;
       }),
 
-      update: authedQuery
+update: authedQuery
   .input(z.object({
     id: z.number(),
     customerName: z.string(),

@@ -80,17 +80,23 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     },
   });
 
-  useEffect(() => {
-    if (expenseToEdit) {
-      setValue("name", expenseToEdit.name);
-      setValue("amount", expenseToEdit.amount);
-      setValue("category", expenseToEdit.category as any);
-      setValue("paymentMethod", expenseToEdit.paymentMethod as any);
-      setValue("paidTo", expenseToEdit.paidTo || "");
-      setValue("dateTime", expenseToEdit.dateTime.slice(0, 16));
-      setValue("note", expenseToEdit.note || "");
-    }
-  }, [expenseToEdit, setValue]);
+useEffect(() => {
+  if (expenseToEdit) {
+    setValue("name", expenseToEdit.name);
+    setValue("amount", expenseToEdit.amount);
+    setValue("category", expenseToEdit.category as any);
+    setValue("paymentMethod", expenseToEdit.paymentMethod as any);
+    setValue("paidTo", expenseToEdit.paidTo || "");
+    // Safe date handling
+    const dateTimeValue = expenseToEdit.dateTime 
+      ? typeof expenseToEdit.dateTime === "string" 
+        ? expenseToEdit.dateTime.slice(0, 16) 
+        : new Date(expenseToEdit.dateTime).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16);
+    setValue("dateTime", dateTimeValue);
+    setValue("note", expenseToEdit.note || "");
+  }
+}, [expenseToEdit, setValue]);
 
   const createExpense = trpc.expenses.create.useMutation({
     onSuccess: () => {
@@ -115,18 +121,23 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     onError: (err) => toast.error(err.message),
   });
 
-  const onSubmit = (data: ExpenseForm) => {
-    const payload = {
-      ...data,
-      receiptUrl: receiptFile ? `uploaded:${receiptFile.name}` : expenseToEdit?.receiptUrl,
-    };
-
-    if (isEditMode && expenseToEdit) {
-      updateExpense.mutate({ id: expenseToEdit.id, ...payload });
-    } else {
-      createExpense.mutate(payload);
-    }
+const onSubmit = (data: ExpenseForm) => {
+  const receiptUrlValue = receiptFile ? `uploaded:${receiptFile.name}` : undefined;
+  
+  const payload = {
+    ...data,
+    receiptUrl: receiptUrlValue,
   };
+
+  if (isEditMode && expenseToEdit) {
+    updateExpense.mutate({ 
+      id: expenseToEdit.id, 
+      ...payload,
+    });
+  } else {
+    createExpense.mutate(payload);
+  }
+};
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
