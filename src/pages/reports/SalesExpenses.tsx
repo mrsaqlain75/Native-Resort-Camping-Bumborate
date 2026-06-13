@@ -464,7 +464,7 @@ export default function SalesExpenses() {
 
       {/* Update Modal */}
 <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
-  <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+  <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] overflow-y-auto">
     <DialogHeader>
       <DialogTitle>
         Update {view === "restaurant" ? "Sale" : view === "camping" ? "Camping Sale" : "Expense"}
