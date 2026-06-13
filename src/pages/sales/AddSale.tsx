@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -32,7 +32,21 @@ const saleSchema = z.object({
 
 type SaleForm = z.infer<typeof saleSchema>;
 
-export default function AddSale() {
+interface AddSaleProps {
+  saleToEdit?: {
+    id: number;
+    items: { name: string; quantity: number; unitPrice: number; total: number }[];
+    totalAmount: number;
+    paymentMethod: string;
+    source: string;
+    dateTime: string;
+    note?: string | null;
+  };
+  onClose?: () => void;
+}
+
+export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
+  const isEditMode = !!saleToEdit;
   const [receiptSale, setReceiptSale] = useState<{
     id: number;
     items: { name: string; quantity: number; unitPrice: number; total: number }[];
@@ -65,6 +79,17 @@ export default function AddSale() {
     },
   });
 
+  // Populate form when editing
+  useEffect(() => {
+    if (saleToEdit) {
+      setValue("items", saleToEdit.items);
+      setValue("paymentMethod", saleToEdit.paymentMethod as "cash" | "e_transaction");
+      setValue("source", saleToEdit.source as "dine_in" | "online_order" | "other");
+      setValue("dateTime", saleToEdit.dateTime.slice(0, 16));
+      setValue("note", saleToEdit.note || "");
+    }
+  }, [saleToEdit, setValue]);
+
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
 
   const createSale = trpc.sales.create.useMutation({
@@ -83,6 +108,18 @@ export default function AddSale() {
         note: watch("note"),
       });
       reset();
+      if (onClose) onClose();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateSale = trpc.sales.update.useMutation({
+    onSuccess: () => {
+      toast.success("Sale updated successfully!");
+      utils.sales.list.invalidate();
+      utils.reports.dashboardSummary.invalidate();
+      utils.reports.recentActivity.invalidate();
+      if (onClose) onClose();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -95,10 +132,16 @@ export default function AddSale() {
   const grandTotal = watch("items").reduce((sum, item) => sum + (item.total || 0), 0);
 
   const onSubmit = (data: SaleForm) => {
-    createSale.mutate({
+    const payload = {
       ...data,
       totalAmount: data.items.reduce((sum, item) => sum + item.total, 0),
-    });
+    };
+
+    if (isEditMode && saleToEdit) {
+      updateSale.mutate({ id: saleToEdit.id, ...payload });
+    } else {
+      createSale.mutate(payload);
+    }
   };
 
   const handleMenuSelect = (index: number, menuItemId: string) => {
@@ -114,8 +157,10 @@ export default function AddSale() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold font-serif">Add Sale</h1>
-        <p className="text-sm text-[var(--muted-foreground)]">Record a new restaurant sale transaction</p>
+        <h1 className="text-2xl font-bold font-serif">{isEditMode ? "Update Sale" : "Add Sale"}</h1>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          {isEditMode ? "Update existing sale transaction" : "Record a new restaurant sale transaction"}
+        </p>
       </div>
 
       <Card>
@@ -127,7 +172,7 @@ export default function AddSale() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            {/* Items */}
+            {/* Items section - same as before */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-base">Items</Label>
@@ -207,7 +252,6 @@ export default function AddSale() {
               )}
             </div>
 
-            {/* Totals */}
             <div className="flex justify-end">
               <div className="text-right">
                 <p className="text-sm text-[var(--muted-foreground)]">Grand Total</p>
@@ -215,12 +259,10 @@ export default function AddSale() {
               </div>
             </div>
 
-            {/* Payment & Source */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <Label>Payment Method</Label>
                 <RadioGroup
-                  defaultValue="cash"
                   value={watch("paymentMethod")}
                   onValueChange={(v) => setValue("paymentMethod", v as "cash" | "e_transaction")}
                   className="flex gap-4 mt-2"
@@ -239,7 +281,6 @@ export default function AddSale() {
               <div>
                 <Label>Source</Label>
                 <RadioGroup
-                  defaultValue="dine_in"
                   value={watch("source")}
                   onValueChange={(v) => setValue("source", v as "dine_in" | "online_order" | "other")}
                   className="flex gap-4 mt-2"
@@ -260,7 +301,6 @@ export default function AddSale() {
               </div>
             </div>
 
-            {/* Date & Note */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <Label htmlFor="dateTime">Date & Time</Label>
@@ -273,91 +313,100 @@ export default function AddSale() {
             </div>
 
             <div className="flex gap-3">
-              <Button type="submit" className="flex-1" disabled={createSale.isPending}>
-                {createSale.isPending ? "Saving..." : "Record Sale"}
+              <Button type="submit" className="flex-1" disabled={createSale.isPending || updateSale.isPending}>
+                {(createSale.isPending || updateSale.isPending) ? "Saving..." : (isEditMode ? "Update Sale" : "Record Sale")}
               </Button>
-              <Button type="button" variant="outline" onClick={() => reset()}>
-                Reset
-              </Button>
+              {onClose && (
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Cancel
+                </Button>
+              )}
+              {!onClose && (
+                <Button type="button" variant="outline" onClick={() => reset()}>
+                  Reset
+                </Button>
+              )}
             </div>
           </form>
         </CardContent>
       </Card>
 
-      {/* Receipt Modal */}
-      <Dialog open={!!receiptSale} onOpenChange={() => setReceiptSale(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-center font-serif">Receipt</DialogTitle>
-          </DialogHeader>
-          {receiptSale && (
-            <div className="bg-white text-black p-6 rounded-lg space-y-4" id="receipt">
-              <div className="text-center border-b border-black pb-3">
-                <h2 className="text-xl font-bold font-serif">Native Resort & Camping</h2>
-                <p className="text-xs">Bumburate</p>
-                <p className="text-xs">Guides . Cuisines . Events</p>
-              </div>
-              <div className="text-xs space-y-1">
-                <p>Receipt #: {String(receiptSale.id).padStart(6, "0")}</p>
-                <p>Date: {format(new Date(receiptSale.dateTime), "MMM dd, yyyy hh:mm a")}</p>
-                <p>Payment: {receiptSale.paymentMethod === "cash" ? "Cash" : "E-Transaction"}</p>
-                <p>Source: {receiptSale.source.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}</p>
-              </div>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-black">
-                    <th className="text-left py-1">Item</th>
-                    <th className="text-center py-1">Qty</th>
-                    <th className="text-right py-1">Price</th>
-                    <th className="text-right py-1">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {receiptSale.items.map((item, i) => (
-                    <tr key={i}>
-                      <td className="py-1">{item.name}</td>
-                      <td className="text-center py-1">{item.quantity}</td>
-                      <td className="text-right py-1">{item.unitPrice.toLocaleString()}</td>
-                      <td className="text-right py-1">{item.total.toLocaleString()}</td>
+      {/* Receipt Modal - only for new sales */}
+      {!isEditMode && (
+        <Dialog open={!!receiptSale} onOpenChange={() => setReceiptSale(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-center font-serif">Receipt</DialogTitle>
+            </DialogHeader>
+            {receiptSale && (
+              <div className="bg-white text-black p-6 rounded-lg space-y-4" id="receipt">
+                <div className="text-center border-b border-black pb-3">
+                  <h2 className="text-xl font-bold font-serif">Native Resort & Camping</h2>
+                  <p className="text-xs">Bumburate</p>
+                  <p className="text-xs">Guides . Cuisines . Events</p>
+                </div>
+                <div className="text-xs space-y-1">
+                  <p>Receipt #: {String(receiptSale.id).padStart(6, "0")}</p>
+                  <p>Date: {format(new Date(receiptSale.dateTime), "MMM dd, yyyy hh:mm a")}</p>
+                  <p>Payment: {receiptSale.paymentMethod === "cash" ? "Cash" : "E-Transaction"}</p>
+                  <p>Source: {receiptSale.source.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}</p>
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-black">
+                      <th className="text-left py-1">Item</th>
+                      <th className="text-center py-1">Qty</th>
+                      <th className="text-right py-1">Price</th>
+                      <th className="text-right py-1">Total</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="border-t border-black pt-2 flex justify-between text-sm font-bold">
-                <span>Total</span>
-                <span>Rs. {receiptSale.totalAmount.toLocaleString()}</span>
+                  </thead>
+                  <tbody>
+                    {receiptSale.items.map((item, i) => (
+                      <tr key={i}>
+                        <td className="py-1">{item.name}</td>
+                        <td className="text-center py-1">{item.quantity}</td>
+                        <td className="text-right py-1">{item.unitPrice.toLocaleString()}</td>
+                        <td className="text-right py-1">{item.total.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="border-t border-black pt-2 flex justify-between text-sm font-bold">
+                  <span>Total</span>
+                  <span>Rs. {receiptSale.totalAmount.toLocaleString()}</span>
+                </div>
+                {receiptSale.note && <p className="text-xs text-gray-500">Note: {receiptSale.note}</p>}
+                <p className="text-center text-[10px] pt-2">Thank you for visiting Native Resort!</p>
+                <Button
+                  className="w-full mt-2"
+                  onClick={() => {
+                    const printWindow = window.open("", "_blank");
+                    if (printWindow) {
+                      printWindow.document.write(`
+                        <html><head><title>Receipt</title>
+                        <style>
+                          body { font-family: sans-serif; padding: 20px; width: 148mm; }
+                          h2 { text-align: center; margin: 0; }
+                          p { margin: 2px 0; }
+                          table { width: 100%; border-collapse: collapse; }
+                          th, td { text-align: left; padding: 4px; }
+                          .total { font-weight: bold; border-top: 2px solid black; margin-top: 10px; padding-top: 5px; }
+                        </style></head><body>
+                        ${document.getElementById("receipt")?.innerHTML || ""}
+                        </body></html>
+                      `);
+                      printWindow.document.close();
+                      printWindow.print();
+                    }
+                  }}
+                >
+                  <Printer className="h-4 w-4 mr-2" /> Print Receipt
+                </Button>
               </div>
-              {receiptSale.note && <p className="text-xs text-gray-500">Note: {receiptSale.note}</p>}
-              <p className="text-center text-[10px] pt-2">Thank you for visiting Native Resort!</p>
-              <Button
-                className="w-full mt-2"
-                onClick={() => {
-                  const printWindow = window.open("", "_blank");
-                  if (printWindow) {
-                    printWindow.document.write(`
-                      <html><head><title>Receipt</title>
-                      <style>
-                        body { font-family: sans-serif; padding: 20px; width: 148mm; }
-                        h2 { text-align: center; margin: 0; }
-                        p { margin: 2px 0; }
-                        table { width: 100%; border-collapse: collapse; }
-                        th, td { text-align: left; padding: 4px; }
-                        .total { font-weight: bold; border-top: 2px solid black; margin-top: 10px; padding-top: 5px; }
-                      </style></head><body>
-                      ${document.getElementById("receipt")?.innerHTML || ""}
-                      </body></html>
-                    `);
-                    printWindow.document.close();
-                    printWindow.print();
-                  }
-                }}
-              >
-                <Printer className="h-4 w-4 mr-2" /> Print Receipt
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

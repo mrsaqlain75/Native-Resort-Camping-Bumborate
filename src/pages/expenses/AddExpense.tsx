@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DollarSign } from "lucide-react";
 import { toast } from "sonner";
- 
+
 const expenseSchema = z.object({
   name: z.string().min(1, "Expense name is required"),
   amount: z.number().min(0.01, "Amount must be greater than 0"),
@@ -40,7 +40,23 @@ const paymentMethods = [
   { value: "bank_transfer", label: "Bank Transfer" },
 ];
 
-export default function AddExpense() {
+interface AddExpenseProps {
+  expenseToEdit?: {
+    id: number;
+    name: string;
+    amount: number;
+    category: string;
+    paymentMethod: string;
+    paidTo?: string | null;
+    receiptUrl?: string | null;
+    dateTime: string;
+    note?: string | null;
+  };
+  onClose?: () => void;
+}
+
+export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) {
+  const isEditMode = !!expenseToEdit;
   const utils = trpc.useUtils();
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
@@ -64,30 +80,61 @@ export default function AddExpense() {
     },
   });
 
+  useEffect(() => {
+    if (expenseToEdit) {
+      setValue("name", expenseToEdit.name);
+      setValue("amount", expenseToEdit.amount);
+      setValue("category", expenseToEdit.category as any);
+      setValue("paymentMethod", expenseToEdit.paymentMethod as any);
+      setValue("paidTo", expenseToEdit.paidTo || "");
+      setValue("dateTime", expenseToEdit.dateTime.slice(0, 16));
+      setValue("note", expenseToEdit.note || "");
+    }
+  }, [expenseToEdit, setValue]);
+
   const createExpense = trpc.expenses.create.useMutation({
     onSuccess: () => {
       toast.success("Expense recorded successfully!");
+      utils.expenses.list.invalidate();
       utils.reports.dashboardSummary.invalidate();
       utils.reports.recentActivity.invalidate();
-      utils.expenses.todaySummary.invalidate();
       reset();
       setReceiptFile(null);
+      if (onClose) onClose();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateExpense = trpc.expenses.update.useMutation({
+    onSuccess: () => {
+      toast.success("Expense updated successfully!");
+      utils.expenses.list.invalidate();
+      utils.reports.dashboardSummary.invalidate();
+      if (onClose) onClose();
     },
     onError: (err) => toast.error(err.message),
   });
 
   const onSubmit = (data: ExpenseForm) => {
-    createExpense.mutate({
+    const payload = {
       ...data,
-      receiptUrl: receiptFile ? `uploaded:${receiptFile.name}` : undefined,
-    });
+      receiptUrl: receiptFile ? `uploaded:${receiptFile.name}` : expenseToEdit?.receiptUrl,
+    };
+
+    if (isEditMode && expenseToEdit) {
+      updateExpense.mutate({ id: expenseToEdit.id, ...payload });
+    } else {
+      createExpense.mutate(payload);
+    }
   };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold font-serif">Add Expense</h1>
-        <p className="text-sm text-[var(--muted-foreground)]">Record a new business expense</p>
+        <h1 className="text-2xl font-bold font-serif">{isEditMode ? "Update Expense" : "Add Expense"}</h1>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          {isEditMode ? "Update existing business expense" : "Record a new business expense"}
+        </p>
       </div>
 
       <Card>
@@ -165,16 +212,18 @@ export default function AddExpense() {
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="receipt">Upload Receipt (Optional)</Label>
-              <Input
-                id="receipt"
-                type="file"
-                accept="image/*,.pdf"
-                onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-              />
-              {receiptFile && <p className="text-xs text-[var(--muted-foreground)] mt-1">Selected: {receiptFile.name}</p>}
-            </div>
+            {!isEditMode && (
+              <div>
+                <Label htmlFor="receipt">Upload Receipt (Optional)</Label>
+                <Input
+                  id="receipt"
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                />
+                {receiptFile && <p className="text-xs text-[var(--muted-foreground)] mt-1">Selected: {receiptFile.name}</p>}
+              </div>
+            )}
 
             <div>
               <Label htmlFor="note">Note / Remarks (Optional)</Label>
@@ -182,12 +231,19 @@ export default function AddExpense() {
             </div>
 
             <div className="flex gap-3 pt-2">
-              <Button type="submit" className="flex-1" disabled={createExpense.isPending}>
-                {createExpense.isPending ? "Saving..." : "Record Expense"}
+              <Button type="submit" className="flex-1" disabled={createExpense.isPending || updateExpense.isPending}>
+                {(createExpense.isPending || updateExpense.isPending) ? "Saving..." : (isEditMode ? "Update Expense" : "Record Expense")}
               </Button>
-              <Button type="button" variant="outline" onClick={() => reset()}>
-                Reset
-              </Button>
+              {onClose && (
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Cancel
+                </Button>
+              )}
+              {!onClose && (
+                <Button type="button" variant="outline" onClick={() => reset()}>
+                  Reset
+                </Button>
+              )}
             </div>
           </form>
         </CardContent>

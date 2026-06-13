@@ -154,6 +154,45 @@ export const campingRouter = createRouter({
         return rows;
       }),
 
+      update: authedQuery
+  .input(z.object({
+    id: z.number(),
+    customerName: z.string(),
+    checkIn: z.string(),
+    checkOut: z.string(),
+    peopleCount: z.number(),
+    numberOfCamps: z.number(),
+    services: z.array(z.object({ name: z.string(), price: z.number() })),
+    nights: z.number(),
+    spotTotal: z.number(),
+    servicesTotal: z.number(),
+    totalAmount: z.number(),
+    paymentMethod: z.enum(["cash", "e_transaction"]),
+    dateTime: z.string(),
+    note: z.string().optional(),
+  }))
+  .mutation(async ({ input }) => {
+    const db = getDb();
+    await db.update(schema.campingSales)
+      .set({
+        customerName: input.customerName,
+        checkIn: new Date(input.checkIn),
+        checkOut: new Date(input.checkOut),
+        peopleCount: input.peopleCount,
+        numberOfCamps: input.numberOfCamps,
+        services: input.services,
+        nights: input.nights,
+        spotTotal: input.spotTotal.toString(),
+        servicesTotal: input.servicesTotal.toString(),
+        totalAmount: input.totalAmount.toString(),
+        paymentMethod: input.paymentMethod,
+        dateTime: new Date(input.dateTime),
+        note: input.note || null,
+      })
+      .where(eq(schema.campingSales.id, input.id));
+    return { success: true };
+  }),
+
     yearlyBreakdown: authedQuery.query(async () => {
       const db = getDb();
       const rows = await db

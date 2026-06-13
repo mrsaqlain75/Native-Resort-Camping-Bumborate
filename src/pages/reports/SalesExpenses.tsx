@@ -4,6 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import AddSale from "@/pages/sales/AddSale";
+import AddCampingSale from "@/pages/camping/AddCampingSale";
+import AddExpense from "@/pages/expenses/AddExpense";
 import {
   Table,
   TableBody,
@@ -55,6 +58,8 @@ export default function SalesExpenses() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<{ id: number; type: string } | null>(null);
   const ITEMS_PER_PAGE = 20;
+  const [selectedRecord, setSelectedRecord] = useState<CombinedRecord | null>(null);
+const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
 
   const { data: restaurantSales, isLoading: salesLoading, refetch: refetchSales } = trpc.sales.list.useQuery(undefined, {
     enabled: view === "restaurant",
@@ -386,7 +391,10 @@ export default function SalesExpenses() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => toast.info("Update feature coming soon")}
+                              onClick={() => {
+                                setSelectedRecord(record);
+                                setIsUpdateModalOpen(true);
+                              }}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>

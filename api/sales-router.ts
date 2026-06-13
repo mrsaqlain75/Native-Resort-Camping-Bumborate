@@ -129,6 +129,37 @@ delete: authedQuery
       return rows;
     }),
 
+
+    update: authedQuery
+  .input(z.object({
+    id: z.number(),
+    items: z.array(z.object({
+      name: z.string(),
+      quantity: z.number(),
+      unitPrice: z.number(),
+      total: z.number(),
+    })),
+    totalAmount: z.number(),
+    paymentMethod: z.enum(["cash", "e_transaction"]),
+    source: z.enum(["dine_in", "online_order", "other"]),
+    dateTime: z.string(),
+    note: z.string().optional(),
+  }))
+  .mutation(async ({ input }) => {
+    const db = getDb();
+    await db.update(schema.sales)
+      .set({
+        items: input.items,
+        totalAmount: input.totalAmount.toString(),
+        paymentMethod: input.paymentMethod,
+        source: input.source,
+        dateTime: new Date(input.dateTime),
+        note: input.note || null,
+      })
+      .where(eq(schema.sales.id, input.id));
+    return { success: true };
+  }),
+
   monthlyBreakdown: authedQuery
     .input(z.object({ year: z.number() }))
     .query(async ({ input }) => {

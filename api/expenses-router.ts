@@ -19,6 +19,8 @@ delete: authedQuery
     return { success: true };
   }),
 
+
+
   listByDateRange: authedQuery
     .input(z.object({ from: z.string(), to: z.string() }))
     .query(async ({ input }) => {
@@ -64,7 +66,34 @@ delete: authedQuery
       return { success: true };
     }),
 
-
+    update: authedQuery
+  .input(z.object({
+    id: z.number(),
+    name: z.string(),
+    amount: z.number(),
+    category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
+    paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
+    paidTo: z.string().optional(),
+    receiptUrl: z.string().optional(),
+    dateTime: z.string(),
+    note: z.string().optional(),
+  }))
+  .mutation(async ({ input }) => {
+    const db = getDb();
+    await db.update(schema.expenses)
+      .set({
+        name: input.name,
+        amount: input.amount.toString(),
+        category: input.category,
+        paymentMethod: input.paymentMethod,
+        paidTo: input.paidTo || null,
+        receiptUrl: input.receiptUrl || null,
+        dateTime: new Date(input.dateTime),
+        note: input.note || null,
+      })
+      .where(eq(schema.expenses.id, input.id));
+    return { success: true };
+  }),
 
   todaySummary: authedQuery.query(async () => {
     const db = getDb();
