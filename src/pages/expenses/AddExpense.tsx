@@ -80,6 +80,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     },
   });
 
+  // Populate form when editing
   useEffect(() => {
     if (expenseToEdit) {
       setValue("name", expenseToEdit.name);
@@ -138,6 +139,10 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     }
   };
 
+  // Get the current display value for category
+  const currentCategory = watch("category");
+  const currentPaymentMethod = watch("paymentMethod");
+
   return (
     <div key={expenseToEdit?.id} className="max-w-2xl mx-auto space-y-6">
       <div>
@@ -180,11 +185,10 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               <div>
                 <Label>Category</Label>
                 <Select
-                  key={`category-${expenseToEdit?.id}-${expenseToEdit?.category}`}
-                  value={watch("category")}
+                  value={currentCategory}
                   onValueChange={(v) => setValue("category", v as ExpenseForm["category"])}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -197,11 +201,10 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               <div>
                 <Label>Payment Method</Label>
                 <Select
-                  key={`payment-${expenseToEdit?.id}`}
-                  value={watch("paymentMethod")}
+                  value={currentPaymentMethod}
                   onValueChange={(v) => setValue("paymentMethod", v as ExpenseForm["paymentMethod"])}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select payment method" />
                   </SelectTrigger>
                   <SelectContent>
