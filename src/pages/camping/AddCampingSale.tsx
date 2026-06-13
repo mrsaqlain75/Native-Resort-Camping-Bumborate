@@ -25,7 +25,13 @@ const CAMPING_SERVICES = [
 // Default price per camp per night
 const PRICE_PER_CAMP_PER_NIGHT = 500;
 
-export default function AddCampingSale() {
+
+interface AddCampingSaleProps {
+  campingSaleToEdit?: any;
+  onClose?: () => void;
+}
+
+export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampingSaleProps) {
   const utils = trpc.useUtils();
 
   const [customerName, setCustomerName] = useState("");

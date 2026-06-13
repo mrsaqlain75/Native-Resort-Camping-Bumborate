@@ -57,9 +57,9 @@ export default function SalesExpenses() {
   const [page, setPage] = useState(1);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<{ id: number; type: string } | null>(null);
-  const ITEMS_PER_PAGE = 20;
   const [selectedRecord, setSelectedRecord] = useState<CombinedRecord | null>(null);
-const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const ITEMS_PER_PAGE = 20;
 
   const { data: restaurantSales, isLoading: salesLoading, refetch: refetchSales } = trpc.sales.list.useQuery(undefined, {
     enabled: view === "restaurant",
@@ -392,7 +392,6 @@ const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
                               variant="ghost"
                               size="icon"
                               onClick={() => {
-                                console.log("Update clicked for record:", record);
                                 setSelectedRecord(record);
                                 setIsUpdateModalOpen(true);
                               }}
@@ -443,6 +442,7 @@ const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
         </CardContent>
       </Card>
 
+      {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -461,6 +461,27 @@ const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Update Modal */}
+<Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
+  <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>
+        Update {view === "restaurant" ? "Sale" : view === "camping" ? "Camping Sale" : "Expense"}
+      </DialogTitle>
+    </DialogHeader>
+    {view === "restaurant" && selectedRecord && (
+      <AddSale saleToEdit={selectedRecord as any} onClose={() => setIsUpdateModalOpen(false)} />
+    )}
+    {view === "camping" && selectedRecord && (
+      <AddCampingSale campingSaleToEdit={selectedRecord as any} onClose={() => setIsUpdateModalOpen(false)} />
+    )}
+    {view === "expenses" && selectedRecord && (
+      <AddExpense expenseToEdit={selectedRecord as any} onClose={() => setIsUpdateModalOpen(false)} />
+    )}
+  </DialogContent>
+</Dialog>
+
     </div>
   );
 }
