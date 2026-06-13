@@ -392,6 +392,7 @@ const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
                               variant="ghost"
                               size="icon"
                               onClick={() => {
+                                console.log("Update clicked for record:", record);
                                 setSelectedRecord(record);
                                 setIsUpdateModalOpen(true);
                               }}
