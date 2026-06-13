@@ -80,23 +80,22 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     },
   });
 
-useEffect(() => {
-  if (expenseToEdit) {
-    setValue("name", expenseToEdit.name);
-    setValue("amount", expenseToEdit.amount);
-    setValue("category", expenseToEdit.category as any);
-    setValue("paymentMethod", expenseToEdit.paymentMethod as any);
-    setValue("paidTo", expenseToEdit.paidTo || "");
-    // Safe date handling
-    const dateTimeValue = expenseToEdit.dateTime 
-      ? typeof expenseToEdit.dateTime === "string" 
-        ? expenseToEdit.dateTime.slice(0, 16) 
-        : new Date(expenseToEdit.dateTime).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16);
-    setValue("dateTime", dateTimeValue);
-    setValue("note", expenseToEdit.note || "");
-  }
-}, [expenseToEdit, setValue]);
+  useEffect(() => {
+    if (expenseToEdit) {
+      setValue("name", expenseToEdit.name);
+      setValue("amount", expenseToEdit.amount);
+      setValue("category", expenseToEdit.category as any);
+      setValue("paymentMethod", expenseToEdit.paymentMethod as any);
+      setValue("paidTo", expenseToEdit.paidTo || "");
+      const dateTimeValue = expenseToEdit.dateTime 
+        ? typeof expenseToEdit.dateTime === "string" 
+          ? expenseToEdit.dateTime.slice(0, 16) 
+          : new Date(expenseToEdit.dateTime).toISOString().slice(0, 16)
+        : new Date().toISOString().slice(0, 16);
+      setValue("dateTime", dateTimeValue);
+      setValue("note", expenseToEdit.note || "");
+    }
+  }, [expenseToEdit, setValue]);
 
   const createExpense = trpc.expenses.create.useMutation({
     onSuccess: () => {
@@ -121,26 +120,26 @@ useEffect(() => {
     onError: (err) => toast.error(err.message),
   });
 
-const onSubmit = (data: ExpenseForm) => {
-  const receiptUrlValue = receiptFile ? `uploaded:${receiptFile.name}` : undefined;
-  
-  const payload = {
-    ...data,
-    receiptUrl: receiptUrlValue,
+  const onSubmit = (data: ExpenseForm) => {
+    const receiptUrlValue = receiptFile ? `uploaded:${receiptFile.name}` : undefined;
+    
+    const payload = {
+      ...data,
+      receiptUrl: receiptUrlValue,
+    };
+
+    if (isEditMode && expenseToEdit) {
+      updateExpense.mutate({ 
+        id: expenseToEdit.id, 
+        ...payload,
+      });
+    } else {
+      createExpense.mutate(payload);
+    }
   };
 
-  if (isEditMode && expenseToEdit) {
-    updateExpense.mutate({ 
-      id: expenseToEdit.id, 
-      ...payload,
-    });
-  } else {
-    createExpense.mutate(payload);
-  }
-};
-
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div key={expenseToEdit?.id} className="max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold font-serif">{isEditMode ? "Update Expense" : "Add Expense"}</h1>
         <p className="text-sm text-[var(--muted-foreground)]">
@@ -181,11 +180,12 @@ const onSubmit = (data: ExpenseForm) => {
               <div>
                 <Label>Category</Label>
                 <Select
+                  key={`category-${expenseToEdit?.id}`}
                   value={watch("category")}
                   onValueChange={(v) => setValue("category", v as ExpenseForm["category"])}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((c) => (
@@ -197,11 +197,12 @@ const onSubmit = (data: ExpenseForm) => {
               <div>
                 <Label>Payment Method</Label>
                 <Select
+                  key={`payment-${expenseToEdit?.id}`}
                   value={watch("paymentMethod")}
                   onValueChange={(v) => setValue("paymentMethod", v as ExpenseForm["paymentMethod"])}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select payment method" />
                   </SelectTrigger>
                   <SelectContent>
                     {paymentMethods.map((m) => (

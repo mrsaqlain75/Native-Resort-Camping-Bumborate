@@ -462,22 +462,22 @@ export default function SalesExpenses() {
         </DialogContent>
       </Dialog>
 
-      {/* Update Modal */}
+{/* Update Modal */}
 <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
-<DialogContent className="!max-w-none w-[95vw] max-h-[90vh] overflow-y-auto">
+  <DialogContent className="!max-w-none w-[95vw] max-h-[90vh] overflow-y-auto">
     <DialogHeader>
       <DialogTitle>
         Update {view === "restaurant" ? "Sale" : view === "camping" ? "Camping Sale" : "Expense"}
       </DialogTitle>
     </DialogHeader>
     {view === "restaurant" && selectedRecord && (
-      <AddSale saleToEdit={selectedRecord as any} onClose={() => setIsUpdateModalOpen(false)} />
+      <AddSale key={selectedRecord.id} saleToEdit={selectedRecord as any} onClose={() => setIsUpdateModalOpen(false)} />
     )}
     {view === "camping" && selectedRecord && (
-      <AddCampingSale campingSaleToEdit={selectedRecord as any} onClose={() => setIsUpdateModalOpen(false)} />
+      <AddCampingSale key={selectedRecord.id} campingSaleToEdit={selectedRecord as any} onClose={() => setIsUpdateModalOpen(false)} />
     )}
     {view === "expenses" && selectedRecord && (
-      <AddExpense expenseToEdit={selectedRecord as any} onClose={() => setIsUpdateModalOpen(false)} />
+      <AddExpense key={selectedRecord.id} expenseToEdit={selectedRecord as any} onClose={() => setIsUpdateModalOpen(false)} />
     )}
   </DialogContent>
 </Dialog>

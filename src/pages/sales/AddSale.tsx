@@ -47,15 +47,7 @@ interface AddSaleProps {
 
 export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
   const isEditMode = !!saleToEdit;
-  const [receiptSale, setReceiptSale] = useState<{
-    id: number;
-    items: { name: string; quantity: number; unitPrice: number; total: number }[];
-    totalAmount: number;
-    paymentMethod: string;
-    source: string;
-    dateTime: string;
-    note?: string | null;
-  } | null>(null);
+  const [receiptSale, setReceiptSale] = useState<any>(null);
 
   const utils = trpc.useUtils();
   const { data: menuItems } = trpc.menu.list.useQuery();
@@ -67,6 +59,7 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
     setValue,
     handleSubmit,
     reset,
+    trigger,
     formState: { errors },
   } = useForm<SaleForm>({
     resolver: zodResolver(saleSchema),
@@ -80,21 +73,21 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
   });
 
   // Populate form when editing
-useEffect(() => {
-  if (saleToEdit) {
-    setValue("items", saleToEdit.items);
-    setValue("paymentMethod", saleToEdit.paymentMethod as "cash" | "e_transaction");
-    setValue("source", saleToEdit.source as "dine_in" | "online_order" | "other");
-    // Safe date handling
-    const dateTimeValue = saleToEdit.dateTime 
-      ? typeof saleToEdit.dateTime === "string" 
-        ? saleToEdit.dateTime.slice(0, 16) 
-        : new Date(saleToEdit.dateTime).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16);
-    setValue("dateTime", dateTimeValue);
-    setValue("note", saleToEdit.note || "");
-  }
-}, [saleToEdit, setValue]);
+  useEffect(() => {
+    if (saleToEdit) {
+      setValue("items", saleToEdit.items);
+      setValue("paymentMethod", saleToEdit.paymentMethod as "cash" | "e_transaction");
+      setValue("source", saleToEdit.source as "dine_in" | "online_order" | "other");
+      const dateTimeValue = saleToEdit.dateTime 
+        ? typeof saleToEdit.dateTime === "string" 
+          ? saleToEdit.dateTime.slice(0, 16) 
+          : new Date(saleToEdit.dateTime).toISOString().slice(0, 16)
+        : new Date().toISOString().slice(0, 16);
+      setValue("dateTime", dateTimeValue);
+      setValue("note", saleToEdit.note || "");
+      trigger();
+    }
+  }, [saleToEdit, setValue, trigger]);
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
 
@@ -160,6 +153,12 @@ useEffect(() => {
     }
   };
 
+  // Helper to get selected menu item value for each row
+  const getSelectedMenuItemValue = (itemName: string) => {
+    const menuItem = menuItems?.find(m => m.name === itemName);
+    return menuItem ? String(menuItem.id) : undefined;
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
@@ -178,7 +177,6 @@ useEffect(() => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            {/* Items section - same as before */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-base">Items</Label>
@@ -196,7 +194,11 @@ useEffect(() => {
                 <div key={field.id} className="grid grid-cols-12 gap-3 items-end p-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/30">
                   <div className="col-span-12 sm:col-span-4">
                     <Label className="text-xs">Menu Item</Label>
-                    <Select onValueChange={(val) => handleMenuSelect(index, val)}>
+                    <Select 
+                      key={`menu-select-${index}-${saleToEdit?.id}`}
+                      defaultValue={getSelectedMenuItemValue(watch(`items.${index}.name`))}
+                      onValueChange={(val) => handleMenuSelect(index, val)}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select from menu" />
                       </SelectTrigger>
@@ -337,7 +339,6 @@ useEffect(() => {
         </CardContent>
       </Card>
 
-      {/* Receipt Modal - only for new sales */}
       {!isEditMode && (
         <Dialog open={!!receiptSale} onOpenChange={() => setReceiptSale(null)}>
           <DialogContent className="max-w-md">
@@ -367,7 +368,7 @@ useEffect(() => {
                     </tr>
                   </thead>
                   <tbody>
-                    {receiptSale.items.map((item, i) => (
+                    {receiptSale.items.map((item: any, i: number) => (
                       <tr key={i}>
                         <td className="py-1">{item.name}</td>
                         <td className="text-center py-1">{item.quantity}</td>

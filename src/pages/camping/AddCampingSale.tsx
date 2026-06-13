@@ -22,9 +22,7 @@ const CAMPING_SERVICES = [
   { name: "Dinner", price: 1000 },
 ];
 
-// Default price per camp per night
 const PRICE_PER_CAMP_PER_NIGHT = 500;
-
 
 interface AddCampingSaleProps {
   campingSaleToEdit?: any;
@@ -43,53 +41,36 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "e_transaction">("cash");
   const [dateTime, setDateTime] = useState(new Date().toISOString().slice(0, 16));
   const [note, setNote] = useState("");
-  const [receiptData, setReceiptData] = useState<{
-    id: number;
-    customerName: string;
-    numberOfCamps: number;
-    checkIn: string;
-    checkOut: string;
-    peopleCount: number;
-    nights: number;
-    services: { name: string; price: number }[];
-    spotTotal: number;
-    servicesTotal: number;
-    totalAmount: number;
-    paymentMethod: string;
-    dateTime: string;
-  } | null>(null);
+  const [receiptData, setReceiptData] = useState<any>(null);
 
-  // Add this useEffect to populate form when editing
-useEffect(() => {
-  if (campingSaleToEdit) {
-    setCustomerName(campingSaleToEdit.customerName || "");
-    setNumberOfCamps(campingSaleToEdit.numberOfCamps || 1);
-    // Handle date formatting safely
-    const checkInValue = campingSaleToEdit.checkIn 
-      ? typeof campingSaleToEdit.checkIn === "string" 
-        ? campingSaleToEdit.checkIn.split('T')[0]
-        : new Date(campingSaleToEdit.checkIn).toISOString().split('T')[0]
-      : "";
-    const checkOutValue = campingSaleToEdit.checkOut 
-      ? typeof campingSaleToEdit.checkOut === "string" 
-        ? campingSaleToEdit.checkOut.split('T')[0]
-        : new Date(campingSaleToEdit.checkOut).toISOString().split('T')[0]
-      : "";
-    setCheckIn(checkInValue);
-    setCheckOut(checkOutValue);
-    setPeopleCount(campingSaleToEdit.peopleCount || 2);
-    setSelectedServices(campingSaleToEdit.services?.map((s: any) => s.name) || []);
-    setPaymentMethod(campingSaleToEdit.paymentMethod || "cash");
-    // Safe date handling for dateTime
-    const dateTimeValue = campingSaleToEdit.dateTime 
-      ? typeof campingSaleToEdit.dateTime === "string" 
-        ? campingSaleToEdit.dateTime.slice(0, 16)
-        : new Date(campingSaleToEdit.dateTime).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16);
-    setDateTime(dateTimeValue);
-    setNote(campingSaleToEdit.note || "");
-  }
-}, [campingSaleToEdit]);
+  useEffect(() => {
+    if (campingSaleToEdit) {
+      setCustomerName(campingSaleToEdit.customerName || "");
+      setNumberOfCamps(campingSaleToEdit.numberOfCamps || 1);
+      const checkInValue = campingSaleToEdit.checkIn 
+        ? typeof campingSaleToEdit.checkIn === "string" 
+          ? campingSaleToEdit.checkIn.split('T')[0]
+          : new Date(campingSaleToEdit.checkIn).toISOString().split('T')[0]
+        : "";
+      const checkOutValue = campingSaleToEdit.checkOut 
+        ? typeof campingSaleToEdit.checkOut === "string" 
+          ? campingSaleToEdit.checkOut.split('T')[0]
+          : new Date(campingSaleToEdit.checkOut).toISOString().split('T')[0]
+        : "";
+      setCheckIn(checkInValue);
+      setCheckOut(checkOutValue);
+      setPeopleCount(campingSaleToEdit.peopleCount || 2);
+      setSelectedServices(campingSaleToEdit.services?.map((s: any) => s.name) || []);
+      setPaymentMethod(campingSaleToEdit.paymentMethod || "cash");
+      const dateTimeValue = campingSaleToEdit.dateTime 
+        ? typeof campingSaleToEdit.dateTime === "string" 
+          ? campingSaleToEdit.dateTime.slice(0, 16)
+          : new Date(campingSaleToEdit.dateTime).toISOString().slice(0, 16)
+        : new Date().toISOString().slice(0, 16);
+      setDateTime(dateTimeValue);
+      setNote(campingSaleToEdit.note || "");
+    }
+  }, [campingSaleToEdit]);
 
   const nights = checkIn && checkOut ? Math.max(1, differenceInDays(new Date(checkOut), new Date(checkIn))) : 0;
   const spotTotal = PRICE_PER_CAMP_PER_NIGHT * numberOfCamps * nights;
@@ -120,6 +101,17 @@ useEffect(() => {
         dateTime,
       });
       resetForm();
+      if (onClose) onClose();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateSale = trpc.camping.sales.update.useMutation({
+    onSuccess: () => {
+      toast.success("Camping sale updated successfully!");
+      utils.camping.sales.list.invalidate();
+      utils.reports.dashboardSummary.invalidate();
+      if (onClose) onClose();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -136,44 +128,34 @@ useEffect(() => {
     setNote("");
   };
 
-const handleSubmit = () => {
-  if (!customerName || !checkIn || !checkOut) {
-    toast.error("Please fill all required fields");
-    return;
-  }
-  
-  const payload = {
-    customerName,
-    checkIn,
-    checkOut,
-    peopleCount,
-    numberOfCamps,
-    services: selectedServices.map((sName) => ({ name: sName, price: CAMPING_SERVICES.find((s) => s.name === sName)?.price || 0 })),
-    nights,
-    spotTotal,
-    servicesTotal,
-    totalAmount,
-    paymentMethod,
-    dateTime,
-    note: note || undefined,
+  const handleSubmit = () => {
+    if (!customerName || !checkIn || !checkOut) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+    
+    const payload = {
+      customerName,
+      checkIn,
+      checkOut,
+      peopleCount,
+      numberOfCamps,
+      services: selectedServices.map((sName) => ({ name: sName, price: CAMPING_SERVICES.find((s) => s.name === sName)?.price || 0 })),
+      nights,
+      spotTotal,
+      servicesTotal,
+      totalAmount,
+      paymentMethod,
+      dateTime,
+      note: note || undefined,
+    };
+
+    if (campingSaleToEdit) {
+      updateSale.mutate({ id: campingSaleToEdit.id, ...payload });
+    } else {
+      createSale.mutate(payload);
+    }
   };
-
-  if (campingSaleToEdit) {
-    updateSale.mutate({ id: campingSaleToEdit.id, ...payload });
-  } else {
-    createSale.mutate(payload);
-  }
-};
-
-  const updateSale = trpc.camping.sales.update.useMutation({
-  onSuccess: () => {
-    toast.success("Camping sale updated successfully!");
-    utils.camping.sales.list.invalidate();
-    utils.reports.dashboardSummary.invalidate();
-    if (onClose) onClose();
-  },
-  onError: (err) => toast.error(err.message),
-});
 
   const toggleService = (name: string) => {
     setSelectedServices((prev) =>
@@ -182,7 +164,7 @@ const handleSubmit = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div key={campingSaleToEdit?.id} className="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold font-serif">{campingSaleToEdit ? "Update Camping Sale" : "Add Camping Sale"}</h1>
         <p className="text-sm text-[var(--muted-foreground)]">
@@ -260,9 +242,13 @@ const handleSubmit = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
               <Label>Payment Method</Label>
-              <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as "cash" | "e_transaction")}>
+              <Select 
+                key={`payment-${campingSaleToEdit?.id}`}
+                value={paymentMethod} 
+                onValueChange={(v) => setPaymentMethod(v as "cash" | "e_transaction")}
+              >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select payment method" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cash">Cash</SelectItem>
@@ -295,88 +281,94 @@ const handleSubmit = () => {
           </div>
 
           <div className="flex gap-3">
-            <Button className="flex-1" onClick={handleSubmit} disabled={createSale.isPending}>
-              {createSale.isPending ? "Saving..." : (campingSaleToEdit ? "Update Camping Sale" : "Record Camping Sale")}
+            <Button className="flex-1" onClick={handleSubmit} disabled={createSale.isPending || updateSale.isPending}>
+              {(createSale.isPending || updateSale.isPending) ? "Saving..." : (campingSaleToEdit ? "Update Camping Sale" : "Record Camping Sale")}
             </Button>
             <Button variant="outline" onClick={resetForm}>Reset</Button>
+            {onClose && (
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Receipt Modal */}
-      <Dialog open={!!receiptData} onOpenChange={() => setReceiptData(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-center font-serif">Camping Receipt</DialogTitle>
-          </DialogHeader>
-          {receiptData && (
-            <div className="bg-white text-black p-6 rounded-lg space-y-4" id="camping-receipt">
-              <div className="text-center border-b border-black pb-3">
-                <h2 className="text-xl font-bold font-serif">Native Resort & Camping</h2>
-                <p className="text-xs">Bumburate</p>
-              </div>
-              <div className="text-xs space-y-1">
-                <p>Customer: {receiptData.customerName}</p>
-                <p>Number of Camps: {receiptData.numberOfCamps}</p>
-                <p>Check-in: {format(new Date(receiptData.checkIn), "MMM dd, yyyy")}</p>
-                <p>Check-out: {format(new Date(receiptData.checkOut), "MMM dd, yyyy")}</p>
-                <p>Nights: {receiptData.nights} | People: {receiptData.peopleCount}</p>
-                <p>Payment: {receiptData.paymentMethod === "cash" ? "Cash" : "E-Transaction"}</p>
-              </div>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-black">
-                    <th className="text-left py-1">Item</th>
-                    <th className="text-right py-1">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="py-1">Camp ({receiptData.nights} nights x {receiptData.numberOfCamps} camps)</td>
-                    <td className="text-right py-1">{receiptData.spotTotal.toLocaleString()}</td>
-                  </tr>
-                  {receiptData.services.map((s, i) => (
-                    <tr key={i}>
-                      <td className="py-1">{s.name}</td>
-                      <td className="text-right py-1">{s.price.toLocaleString()}</td>
+      {!campingSaleToEdit && (
+        <Dialog open={!!receiptData} onOpenChange={() => setReceiptData(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-center font-serif">Camping Receipt</DialogTitle>
+            </DialogHeader>
+            {receiptData && (
+              <div className="bg-white text-black p-6 rounded-lg space-y-4" id="camping-receipt">
+                <div className="text-center border-b border-black pb-3">
+                  <h2 className="text-xl font-bold font-serif">Native Resort & Camping</h2>
+                  <p className="text-xs">Bumburate</p>
+                </div>
+                <div className="text-xs space-y-1">
+                  <p>Customer: {receiptData.customerName}</p>
+                  <p>Number of Camps: {receiptData.numberOfCamps}</p>
+                  <p>Check-in: {format(new Date(receiptData.checkIn), "MMM dd, yyyy")}</p>
+                  <p>Check-out: {format(new Date(receiptData.checkOut), "MMM dd, yyyy")}</p>
+                  <p>Nights: {receiptData.nights} | People: {receiptData.peopleCount}</p>
+                  <p>Payment: {receiptData.paymentMethod === "cash" ? "Cash" : "E-Transaction"}</p>
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-black">
+                      <th className="text-left py-1">Item</th>
+                      <th className="text-right py-1">Amount</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="border-t border-black pt-2 flex justify-between text-sm font-bold">
-                <span>Total</span>
-                <span>Rs. {receiptData.totalAmount.toLocaleString()}</span>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="py-1">Camp ({receiptData.nights} nights x {receiptData.numberOfCamps} camps)</td>
+                      <td className="text-right py-1">{receiptData.spotTotal.toLocaleString()}</td>
+                    </tr>
+                    {receiptData.services.map((s: any, i: number) => (
+                      <tr key={i}>
+                        <td className="py-1">{s.name}</td>
+                        <td className="text-right py-1">{s.price.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="border-t border-black pt-2 flex justify-between text-sm font-bold">
+                  <span>Total</span>
+                  <span>Rs. {receiptData.totalAmount.toLocaleString()}</span>
+                </div>
+                <p className="text-center text-[10px] pt-2">Thank you for camping with us!</p>
+                <Button
+                  className="w-full mt-2"
+                  onClick={() => {
+                    const printWindow = window.open("", "_blank");
+                    if (printWindow) {
+                      printWindow.document.write(`
+                        <html><head><title>Camping Receipt</title>
+                        <style>
+                          body { font-family: sans-serif; padding: 20px; width: 148mm; }
+                          h2 { text-align: center; margin: 0; }
+                          p { margin: 2px 0; }
+                          table { width: 100%; border-collapse: collapse; }
+                          th, td { text-align: left; padding: 4px; }
+                          .total { font-weight: bold; border-top: 2px solid black; margin-top: 10px; padding-top: 5px; }
+                        </style></head><body>
+                        ${document.getElementById("camping-receipt")?.innerHTML || ""}
+                        </body></html>
+                      `);
+                      printWindow.document.close();
+                      printWindow.print();
+                    }
+                  }}
+                >
+                  <Printer className="h-4 w-4 mr-2" /> Print Receipt
+                </Button>
               </div>
-              <p className="text-center text-[10px] pt-2">Thank you for camping with us!</p>
-              <Button
-                className="w-full mt-2"
-                onClick={() => {
-                  const printWindow = window.open("", "_blank");
-                  if (printWindow) {
-                    printWindow.document.write(`
-                      <html><head><title>Camping Receipt</title>
-                      <style>
-                        body { font-family: sans-serif; padding: 20px; width: 148mm; }
-                        h2 { text-align: center; margin: 0; }
-                        p { margin: 2px 0; }
-                        table { width: 100%; border-collapse: collapse; }
-                        th, td { text-align: left; padding: 4px; }
-                        .total { font-weight: bold; border-top: 2px solid black; margin-top: 10px; padding-top: 5px; }
-                      </style></head><body>
-                      ${document.getElementById("camping-receipt")?.innerHTML || ""}
-                      </body></html>
-                    `);
-                    printWindow.document.close();
-                    printWindow.print();
-                  }
-                }}
-              >
-                <Printer className="h-4 w-4 mr-2" /> Print Receipt
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
