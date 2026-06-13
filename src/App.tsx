@@ -15,6 +15,7 @@ import YearlyReport from '@/pages/reports/YearlyReport'
 import DateRangeReport from '@/pages/reports/DateRangeReport'
 import SellingRankings from '@/pages/reports/SellingRankings'
 import YearComparison from '@/pages/reports/YearComparison'
+import SalesExpenses from '@/pages/reports/SalesExpenses';
 import IncomePage from '@/pages/analysis/IncomePage'
 import ExpensesPage from '@/pages/analysis/ExpensesPage'
 
@@ -43,6 +44,7 @@ function AppRoutes() {
         <Route path="/menu" element={<MenuPage />} />
         <Route path="/camping/sales" element={<AddCampingSale />} />
         <Route path="/reports/today" element={<TodayReport />} />
+        <Route path="/sales-expenses" element={<SalesExpenses />} />
         <Route path="/reports/weekly" element={<WeeklyReport />} />
         <Route path="/reports/monthly" element={<MonthlyReport />} />
         <Route path="/reports/yearly" element={<YearlyReport />} />

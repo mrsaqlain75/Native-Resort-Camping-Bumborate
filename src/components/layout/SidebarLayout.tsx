@@ -47,6 +47,7 @@ const campingItems = [
 
 const reportItems = [
   { path: "/reports/today", label: "Today Report", icon: CalendarDays },
+  { path: "/sales-expenses", label: "Sales & Expenses", icon: Receipt },
   { path: "/reports/weekly", label: "Weekly Report", icon: CalendarRange },
   { path: "/reports/monthly", label: "Monthly Report", icon: TrendingUp },
   { path: "/reports/yearly", label: "Yearly Report", icon: BarChart3 },

@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DollarSign } from "lucide-react";
 import { toast } from "sonner";
-
+ 
 const expenseSchema = z.object({
   name: z.string().min(1, "Expense name is required"),
   amount: z.number().min(0.01, "Amount must be greater than 0"),

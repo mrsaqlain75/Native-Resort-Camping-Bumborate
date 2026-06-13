@@ -5,10 +5,10 @@ import * as schema from "@db/schema";
 import { eq, desc, gte, lte, and, sql } from "drizzle-orm";
 
 export const salesRouter = createRouter({
-  list: authedQuery.query(async () => {
-    const db = getDb();
-    return db.select().from(schema.sales).orderBy(desc(schema.sales.dateTime));
-  }),
+list: authedQuery.query(async () => {
+  const db = getDb();
+  return db.select().from(schema.sales).orderBy(desc(schema.sales.dateTime));
+}),
 
   listByDateRange: authedQuery
     .input(z.object({ from: z.string(), to: z.string() }))
@@ -66,13 +66,13 @@ export const salesRouter = createRouter({
       return rows.at(0) ?? null;
     }),
 
-  delete: authedQuery
-    .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
-      const db = getDb();
-      await db.delete(schema.sales).where(eq(schema.sales.id, input.id));
-      return { success: true };
-    }),
+delete: authedQuery
+  .input(z.object({ id: z.number() }))
+  .mutation(async ({ input }) => {
+    const db = getDb();
+    await db.delete(schema.sales).where(eq(schema.sales.id, input.id));
+    return { success: true };
+  }),
 
   todaySummary: authedQuery.query(async () => {
     const db = getDb();
