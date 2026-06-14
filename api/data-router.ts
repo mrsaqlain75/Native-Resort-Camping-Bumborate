@@ -1,7 +1,5 @@
 import { createRouter, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { spawn } from "child_process";
-import { promisify } from "util";
 import { env } from "./lib/env";
 
 export const dataRouter = createRouter({
@@ -10,9 +8,9 @@ export const dataRouter = createRouter({
     try {
       const db = getDb();
       
-      // Get all table names
-      const tables = await db.execute(`SHOW TABLES`);
-      const tableNames = tables[0].map((row: any) => Object.values(row)[0]);
+      // Get all table names - FIXED: using raw query properly
+      const [tablesResult] = await db.execute(`SHOW TABLES`);
+      const tableNames = (tablesResult as any[]).map((row: any) => Object.values(row)[0]);
       
       const backupData: any = {
         exportedAt: new Date().toISOString(),
@@ -23,14 +21,15 @@ export const dataRouter = createRouter({
       // Export each table's structure and data
       for (const tableName of tableNames) {
         // Get table structure
-        const structure = await db.execute(`SHOW CREATE TABLE ${tableName}`);
+        const [structureResult] = await db.execute(`SHOW CREATE TABLE ${tableName}`);
+        const createStatement = (structureResult as any[])[0]["Create Table"];
         
-        // Get all data
-        const data = await db.select().from(eval(`schema.${tableName}`));
+        // Get all data using raw SQL
+        const [dataRows] = await db.execute(`SELECT * FROM ${tableName}`);
         
         backupData.tables[tableName] = {
-          createStatement: structure[0][0]["Create Table"],
-          data: data
+          createStatement: createStatement,
+          data: dataRows as any[]
         };
       }
       
@@ -56,10 +55,11 @@ export const dataRouter = createRouter({
         // Disable foreign key checks temporarily
         await db.execute(`SET FOREIGN_KEY_CHECKS = 0`);
         
-        // Drop all existing tables
-        const tables = await db.execute(`SHOW TABLES`);
-        const tableNames = tables[0].map((row: any) => Object.values(row)[0]);
+        // Get all existing tables
+        const [tablesResult] = await db.execute(`SHOW TABLES`);
+        const tableNames = (tablesResult as any[]).map((row: any) => Object.values(row)[0]);
         
+        // Drop all existing tables
         for (const tableName of tableNames) {
           await db.execute(`DROP TABLE IF EXISTS ${tableName}`);
         }
@@ -76,7 +76,7 @@ export const dataRouter = createRouter({
             const insertQuery = `INSERT INTO ${tableName} (${columns.join(",")}) VALUES (${placeholders})`;
             
             for (const row of tableData.data) {
-              const values = columns.map(col => row[col]);
+              const values = columns.map((col: string) => row[col]);
               await db.execute(insertQuery, values);
             }
           }
@@ -95,18 +95,18 @@ export const dataRouter = createRouter({
   backupInfo: adminQuery.query(async () => {
     try {
       const db = getDb();
-      const tables = await db.execute(`SHOW TABLE STATUS`);
+      const [tablesResult] = await db.execute(`SHOW TABLE STATUS`);
       let totalSize = 0;
       let totalRows = 0;
       
-      for (const table of tables[0] as any) {
+      for (const table of (tablesResult as any[])) {
         totalSize += table.Data_length + table.Index_length;
         totalRows += table.Rows;
       }
       
       return {
         success: true,
-        tableCount: tables[0].length,
+        tableCount: (tablesResult as any[]).length,
         totalRows,
         totalSize: formatBytes(totalSize)
       };
