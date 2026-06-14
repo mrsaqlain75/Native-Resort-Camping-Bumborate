@@ -18,6 +18,7 @@ import YearComparison from '@/pages/reports/YearComparison'
 import SalesExpenses from '@/pages/reports/SalesExpenses';
 import IncomePage from '@/pages/analysis/IncomePage'
 import ExpensesPage from '@/pages/analysis/ExpensesPage'
+import BackupRestore from '@/pages/data/BackupRestore';
 
 function AppRoutes() {
   const { user, isLoading } = useAuth({ redirectOnUnauthenticated: true })
@@ -56,6 +57,7 @@ function AppRoutes() {
             <Route path="/analysis" element={<ProfitLoss />} />
             <Route path="/income" element={<IncomePage />} />
             <Route path="/expenses/list" element={<ExpensesPage />} />
+            <Route path="/data/backup-restore" element={<BackupRestore />} />
           </>
         )}
         <Route path="*" element={<Navigate to="/" replace />} />

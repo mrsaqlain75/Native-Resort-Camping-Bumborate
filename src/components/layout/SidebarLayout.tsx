@@ -28,6 +28,9 @@ import {
   ChevronDown,
   ChevronRight,
   Menu,
+  Download,
+  Upload, 
+  Database
 } from "lucide-react";
 
 interface SidebarLayoutProps {
@@ -63,6 +66,10 @@ const ownerAnalysisItems = [
   { path: "/analysis", label: "Profit-Loss Analysis", icon: BarChart3 },
   { path: "/income", label: "Total Income", icon: Landmark },
   { path: "/expenses/list", label: "Total Expenses", icon: Wallet },
+];
+
+const dataItems = [
+  { path: "/data/backup-restore", label: "Backup & Restore", icon: Download },
 ];
 
 export function SidebarLayout({ children, isOwner }: SidebarLayoutProps) {
@@ -209,6 +216,12 @@ export function SidebarLayout({ children, isOwner }: SidebarLayoutProps) {
           {isOwner && (
             <div className="pt-1">
               <Section title="Analysis" icon={List} items={[...ownerReportItems, ...ownerAnalysisItems]} sectionKey="analysis" />
+            </div>
+          )}
+
+          {isOwner && (
+            <div className="pt-1">
+              <Section title="Data Management" icon={Database} items={dataItems} sectionKey="data" />
             </div>
           )}
         </nav>
