@@ -47,8 +47,11 @@ export type InsertMenuItem = typeof menuItems.$inferInsert;
 // ========== SALES TABLE ==========
 export const sales = mysqlTable("sales", {
   id: serial("id").primaryKey(),
+  customerName: varchar("customer_name", { length: 255 }).default("Walk-in Customer"),
   items: json("items").$type<{ name: string; quantity: number; unitPrice: number; total: number }[]>().notNull(),
   totalAmount: decimal("total_amount", { precision: 12, scale: 2 }).notNull(),
+  discountPercent: decimal("discount_percent", { precision: 5, scale: 2 }).default("0"),
+  taxPercent: decimal("tax_percent", { precision: 5, scale: 2 }).default("0"),
   paymentMethod: mysqlEnum("payment_method", ["cash", "e_transaction"]).notNull(),
   source: mysqlEnum("source", ["dine_in", "online_order", "other"]).notNull(),
   dateTime: timestamp("date_time").notNull(),
@@ -82,15 +85,17 @@ export type InsertExpense = typeof expenses.$inferInsert;
 export const campingSales = mysqlTable("camping_sales", {
   id: serial("id").primaryKey(),
   customerName: varchar("customer_name", { length: 255 }).notNull(),
+  numberOfCamps: int("number_of_camps").notNull().default(1),
   checkIn: date("check_in").notNull(),
   checkOut: date("check_out").notNull(),
   peopleCount: int("people_count").notNull(),
-  numberOfCamps: int("number_of_camps").notNull().default(1), // New field
   services: json("services").$type<{ name: string; price: number }[]>().notNull(),
   nights: int("nights").notNull(),
   spotTotal: decimal("spot_total", { precision: 12, scale: 2 }).notNull(),
   servicesTotal: decimal("services_total", { precision: 12, scale: 2 }).default("0.00").notNull(),
   totalAmount: decimal("total_amount", { precision: 12, scale: 2 }).notNull(),
+  discountPercent: decimal("discount_percent", { precision: 5, scale: 2 }).default("0"),
+  taxPercent: decimal("tax_percent", { precision: 5, scale: 2 }).default("0"),
   paymentMethod: mysqlEnum("payment_method", ["cash", "e_transaction"]).notNull(),
   dateTime: timestamp("date_time").notNull(),
   note: text("note"),

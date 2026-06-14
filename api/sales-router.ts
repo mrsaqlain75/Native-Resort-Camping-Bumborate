@@ -26,18 +26,19 @@ list: authedQuery.query(async () => {
         .orderBy(desc(schema.sales.dateTime));
     }),
 
-  create: authedQuery
+create: authedQuery
     .input(
       z.object({
-        items: z.array(
-          z.object({
-            name: z.string(),
-            quantity: z.number(),
-            unitPrice: z.number(),
-            total: z.number(),
-          })
-        ),
+        customerName: z.string().optional().default("Walk-in Customer"),
+        items: z.array(z.object({
+          name: z.string(),
+          quantity: z.number(),
+          unitPrice: z.number(),
+          total: z.number(),
+        })),
         totalAmount: z.number(),
+        discountPercent: z.number().optional().default(0),
+        taxPercent: z.number().optional().default(0),
         paymentMethod: z.enum(["cash", "e_transaction"]),
         source: z.enum(["dine_in", "online_order", "other"]),
         dateTime: z.string(),
@@ -47,16 +48,20 @@ list: authedQuery.query(async () => {
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const result = await db.insert(schema.sales).values({
+        customerName: input.customerName || "Walk-in Customer",
         items: input.items,
-        totalAmount: input.totalAmount.toFixed(2),
+        totalAmount: input.totalAmount.toString(),
+        discountPercent: input.discountPercent?.toString() || "0",
+        taxPercent: input.taxPercent?.toString() || "0",
         paymentMethod: input.paymentMethod,
         source: input.source,
         dateTime: new Date(input.dateTime),
         note: input.note || null,
         createdBy: ctx.user.id,
       });
-      return { success: true, id: Number((result as unknown as { insertId: number }).insertId) };
+      return { id: Number(result[0].insertId), success: true };
     }),
+
 
   getById: authedQuery
     .input(z.object({ id: z.number() }))
@@ -130,35 +135,43 @@ delete: authedQuery
     }),
 
 
-    update: authedQuery
-  .input(z.object({
-    id: z.number(),
-    items: z.array(z.object({
-      name: z.string(),
-      quantity: z.number(),
-      unitPrice: z.number(),
-      total: z.number(),
-    })),
-    totalAmount: z.number(),
-    paymentMethod: z.enum(["cash", "e_transaction"]),
-    source: z.enum(["dine_in", "online_order", "other"]),
-    dateTime: z.string(),
-    note: z.string().optional(),
-  }))
-  .mutation(async ({ input }) => {
-    const db = getDb();
-    await db.update(schema.sales)
-      .set({
-        items: input.items,
-        totalAmount: input.totalAmount.toString(),
-        paymentMethod: input.paymentMethod,
-        source: input.source,
-        dateTime: new Date(input.dateTime),
-        note: input.note || null,
+  update: authedQuery
+    .input(
+      z.object({
+        id: z.number(),
+        customerName: z.string().optional(),
+        items: z.array(z.object({
+          name: z.string(),
+          quantity: z.number(),
+          unitPrice: z.number(),
+          total: z.number(),
+        })),
+        totalAmount: z.number(),
+        discountPercent: z.number().optional(),
+        taxPercent: z.number().optional(),
+        paymentMethod: z.enum(["cash", "e_transaction"]),
+        source: z.enum(["dine_in", "online_order", "other"]),
+        dateTime: z.string(),
+        note: z.string().optional(),
       })
-      .where(eq(schema.sales.id, input.id));
-    return { success: true };
-  }),
+    )
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await db.update(schema.sales)
+        .set({
+          customerName: input.customerName || "Walk-in Customer",
+          items: input.items,
+          totalAmount: input.totalAmount.toString(),
+          discountPercent: input.discountPercent?.toString() || "0",
+          taxPercent: input.taxPercent?.toString() || "0",
+          paymentMethod: input.paymentMethod,
+          source: input.source,
+          dateTime: new Date(input.dateTime),
+          note: input.note || null,
+        })
+        .where(eq(schema.sales.id, input.id));
+      return { success: true };
+    }),
 
   monthlyBreakdown: authedQuery
     .input(z.object({ year: z.number() }))

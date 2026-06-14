@@ -293,21 +293,26 @@ export default function SalesExpenses() {
                       <TableHead>Date & Time</TableHead>
                       {view === "restaurant" && (
                         <>
-                          <TableHead>Items</TableHead>
-                          <TableHead>Source</TableHead>
-                          <TableHead>Payment</TableHead>
-                          <TableHead>Amount</TableHead>
+                            <TableHead>Customer Name</TableHead>
+                            <TableHead>Items</TableHead>
+                            <TableHead>Discount</TableHead>
+                            <TableHead>Tax</TableHead>
+                            <TableHead>Source</TableHead>
+                            <TableHead>Payment</TableHead>
+                            <TableHead>Amount</TableHead>
                         </>
                       )}
                       {view === "camping" && (
-                        <>
-                          <TableHead>Customer</TableHead>
-                          <TableHead>Camps</TableHead>
-                          <TableHead>Nights</TableHead>
-                          <TableHead>Services</TableHead>
-                          <TableHead>Payment</TableHead>
-                          <TableHead>Amount</TableHead>
-                        </>
+                          <>
+                            <TableHead>Customer</TableHead>
+                            <TableHead>Camps</TableHead>
+                            <TableHead>Nights</TableHead>
+                            <TableHead>Services</TableHead>
+                            <TableHead>Discount</TableHead>
+                            <TableHead>Tax</TableHead>
+                            <TableHead>Payment</TableHead>
+                            <TableHead>Amount</TableHead>
+                          </>
                       )}
                       {view === "expenses" && (
                         <>
@@ -330,6 +335,7 @@ export default function SalesExpenses() {
 
                         {record.type === "restaurant" && (
                           <>
+                            <TableCell>{record.customerName || "Walk-in Customer"}</TableCell>
                             <TableCell>
                               {record.items?.map((item: any, i: number) => (
                                 <div key={i} className="text-sm">
@@ -337,6 +343,8 @@ export default function SalesExpenses() {
                                 </div>
                               ))}
                             </TableCell>
+                            <TableCell>{record.discountPercent ? `${record.discountPercent}%` : "-"}</TableCell>
+                            <TableCell>{record.taxPercent ? `${record.taxPercent}%` : "-"}</TableCell>
                             <TableCell>
                               <Badge variant="outline">
                                 {record.source === "dine_in" ? "Dine-In" : record.source === "online_order" ? "Online" : "Other"}

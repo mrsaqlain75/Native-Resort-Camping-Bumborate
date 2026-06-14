@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Trash2, Printer, Receipt } from "lucide-react";
+import { Plus, Trash2, Printer, Receipt, User, Percent } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -23,7 +23,10 @@ const saleItemSchema = z.object({
 });
 
 const saleSchema = z.object({
+  customerName: z.string().optional(),
   items: z.array(saleItemSchema).min(1, "At least one item required"),
+  discountPercent: z.number().min(0).max(100).optional(),
+  taxPercent: z.number().min(0).max(100).optional(),
   paymentMethod: z.enum(["cash", "e_transaction"]),
   source: z.enum(["dine_in", "online_order", "other"]),
   dateTime: z.string(),
@@ -35,8 +38,11 @@ type SaleForm = z.infer<typeof saleSchema>;
 interface AddSaleProps {
   saleToEdit?: {
     id: number;
+    customerName?: string | null;
     items: { name: string; quantity: number; unitPrice: number; total: number }[];
     totalAmount: number;
+    discountPercent?: string | null;
+    taxPercent?: string | null;
     paymentMethod: string;
     source: string;
     dateTime: string;
@@ -64,7 +70,10 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
   } = useForm<SaleForm>({
     resolver: zodResolver(saleSchema),
     defaultValues: {
+      customerName: "",
       items: [{ name: "", quantity: 1, unitPrice: 0, total: 0 }],
+      discountPercent: 0,
+      taxPercent: 0,
       paymentMethod: "cash",
       source: "dine_in",
       dateTime: new Date().toISOString().slice(0, 16),
@@ -72,10 +81,12 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
     },
   });
 
-  // Populate form when editing
   useEffect(() => {
     if (saleToEdit) {
+      setValue("customerName", saleToEdit.customerName || "");
       setValue("items", saleToEdit.items);
+      setValue("discountPercent", saleToEdit.discountPercent ? Number(saleToEdit.discountPercent) : 0);
+      setValue("taxPercent", saleToEdit.taxPercent ? Number(saleToEdit.taxPercent) : 0);
       setValue("paymentMethod", saleToEdit.paymentMethod as "cash" | "e_transaction");
       setValue("source", saleToEdit.source as "dine_in" | "online_order" | "other");
       const dateTimeValue = saleToEdit.dateTime 
@@ -99,8 +110,12 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
       utils.sales.todaySummary.invalidate();
       setReceiptSale({
         id: data.id,
+        customerName: watch("customerName") || "Walk-in Customer",
         items: watch("items"),
-        totalAmount: watch("items").reduce((sum, item) => sum + item.total, 0),
+        subtotal: watch("items").reduce((sum, item) => sum + item.total, 0),
+        discountPercent: watch("discountPercent") || 0,
+        taxPercent: watch("taxPercent") || 0,
+        totalAmount: calculateFinalTotal(),
         paymentMethod: watch("paymentMethod"),
         source: watch("source"),
         dateTime: watch("dateTime"),
@@ -128,12 +143,24 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
     setValue(`items.${index}.total`, total);
   };
 
-  const grandTotal = watch("items").reduce((sum, item) => sum + (item.total || 0), 0);
+  const subtotal = watch("items").reduce((sum, item) => sum + (item.total || 0), 0);
+  const discountPercent = watch("discountPercent") || 0;
+  const taxPercent = watch("taxPercent") || 0;
+  
+  const discountAmount = (subtotal * discountPercent) / 100;
+  const afterDiscount = subtotal - discountAmount;
+  const taxAmount = (afterDiscount * taxPercent) / 100;
+  const grandTotal = afterDiscount + taxAmount;
+
+  const calculateFinalTotal = () => {
+    return grandTotal;
+  };
 
   const onSubmit = (data: SaleForm) => {
     const payload = {
       ...data,
-      totalAmount: data.items.reduce((sum, item) => sum + item.total, 0),
+      customerName: data.customerName || "Walk-in Customer",
+      totalAmount: grandTotal,
     };
 
     if (isEditMode && saleToEdit) {
@@ -153,7 +180,6 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
     }
   };
 
-  // Helper to get selected menu item value for each row
   const getSelectedMenuItemValue = (itemName: string) => {
     const menuItem = menuItems?.find(m => m.name === itemName);
     return menuItem ? String(menuItem.id) : undefined;
@@ -177,6 +203,22 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {/* Customer Name */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <Label htmlFor="customerName" className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Customer Name
+                </Label>
+                <Input 
+                  id="customerName" 
+                  {...register("customerName")} 
+                  placeholder="Customer name (optional)"
+                />
+              </div>
+            </div>
+
+            {/* Items section */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-base">Items</Label>
@@ -260,10 +302,61 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
               )}
             </div>
 
-            <div className="flex justify-end">
-              <div className="text-right">
-                <p className="text-sm text-[var(--muted-foreground)]">Grand Total</p>
-                <p className="text-3xl font-bold text-[var(--primary)]">Rs. {grandTotal.toLocaleString()}</p>
+            {/* Discount and Tax Section */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <Label htmlFor="discountPercent" className="flex items-center gap-2">
+                  <Percent className="h-4 w-4" />
+                  Discount (%)
+                </Label>
+                <Input
+                  id="discountPercent"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={100}
+                  {...register("discountPercent", { valueAsNumber: true })}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <Label htmlFor="taxPercent" className="flex items-center gap-2">
+                  <Percent className="h-4 w-4" />
+                  Sales Tax (%)
+                </Label>
+                <Input
+                  id="taxPercent"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={100}
+                  {...register("taxPercent", { valueAsNumber: true })}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            {/* Totals Section */}
+            <div className="border-t border-[var(--border)] pt-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Subtotal:</span>
+                <span>Rs. {subtotal.toLocaleString()}</span>
+              </div>
+              {discountPercent > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Discount ({discountPercent}%):</span>
+                  <span>- Rs. {discountAmount.toLocaleString()}</span>
+                </div>
+              )}
+              {taxPercent > 0 && (
+                <div className="flex justify-between text-sm text-orange-600">
+                  <span>Sales Tax ({taxPercent}%):</span>
+                  <span>+ Rs. {taxAmount.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-lg font-bold border-t border-[var(--border)] pt-2">
+                <span>Grand Total:</span>
+                <span className="text-[var(--primary)]">Rs. {grandTotal.toLocaleString()}</span>
               </div>
             </div>
 
@@ -339,6 +432,7 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
         </CardContent>
       </Card>
 
+      {/* Receipt Modal */}
       {!isEditMode && (
         <Dialog open={!!receiptSale} onOpenChange={() => setReceiptSale(null)}>
           <DialogContent className="max-w-md">
@@ -354,6 +448,7 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
                 </div>
                 <div className="text-xs space-y-1">
                   <p>Receipt #: {String(receiptSale.id).padStart(6, "0")}</p>
+                  <p>Customer: {receiptSale.customerName}</p>
                   <p>Date: {format(new Date(receiptSale.dateTime), "MMM dd, yyyy hh:mm a")}</p>
                   <p>Payment: {receiptSale.paymentMethod === "cash" ? "Cash" : "E-Transaction"}</p>
                   <p>Source: {receiptSale.source.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}</p>
@@ -378,9 +473,27 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
                     ))}
                   </tbody>
                 </table>
-                <div className="border-t border-black pt-2 flex justify-between text-sm font-bold">
-                  <span>Total</span>
-                  <span>Rs. {receiptSale.totalAmount.toLocaleString()}</span>
+                <div className="border-t border-black pt-2 space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span>Subtotal:</span>
+                    <span>Rs. {receiptSale.subtotal.toLocaleString()}</span>
+                  </div>
+                  {receiptSale.discountPercent > 0 && (
+                    <div className="flex justify-between text-xs text-green-600">
+                      <span>Discount ({receiptSale.discountPercent}%):</span>
+                      <span>- Rs. {((receiptSale.subtotal * receiptSale.discountPercent) / 100).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {receiptSale.taxPercent > 0 && (
+                    <div className="flex justify-between text-xs text-orange-600">
+                      <span>Sales Tax ({receiptSale.taxPercent}%):</span>
+                      <span>+ Rs. {(((receiptSale.subtotal - (receiptSale.subtotal * receiptSale.discountPercent) / 100) * receiptSale.taxPercent) / 100).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm font-bold pt-1 border-t border-black">
+                    <span>Total:</span>
+                    <span>Rs. {receiptSale.totalAmount.toLocaleString()}</span>
+                  </div>
                 </div>
                 {receiptSale.note && <p className="text-xs text-gray-500">Note: {receiptSale.note}</p>}
                 <p className="text-center text-[10px] pt-2">Thank you for visiting Native Resort!</p>

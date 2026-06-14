@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tent, Printer } from "lucide-react";
+import { Tent, Printer, Percent, User } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { toast } from "sonner";
 
@@ -38,6 +38,8 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
   const [checkOut, setCheckOut] = useState("");
   const [peopleCount, setPeopleCount] = useState(2);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [discountPercent, setDiscountPercent] = useState(0);
+  const [taxPercent, setTaxPercent] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "e_transaction">("cash");
   const [dateTime, setDateTime] = useState(new Date().toISOString().slice(0, 16));
   const [note, setNote] = useState("");
@@ -61,6 +63,8 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
       setCheckOut(checkOutValue);
       setPeopleCount(campingSaleToEdit.peopleCount || 2);
       setSelectedServices(campingSaleToEdit.services?.map((s: any) => s.name) || []);
+      setDiscountPercent(campingSaleToEdit.discountPercent ? Number(campingSaleToEdit.discountPercent) : 0);
+      setTaxPercent(campingSaleToEdit.taxPercent ? Number(campingSaleToEdit.taxPercent) : 0);
       setPaymentMethod(campingSaleToEdit.paymentMethod || "cash");
       const dateTimeValue = campingSaleToEdit.dateTime 
         ? typeof campingSaleToEdit.dateTime === "string" 
@@ -78,7 +82,11 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
     const svc = CAMPING_SERVICES.find((s) => s.name === sName);
     return sum + (svc?.price || 0);
   }, 0);
-  const totalAmount = spotTotal + servicesTotal;
+  const subtotal = spotTotal + servicesTotal;
+  const discountAmount = (subtotal * discountPercent) / 100;
+  const afterDiscount = subtotal - discountAmount;
+  const taxAmount = (afterDiscount * taxPercent) / 100;
+  const grandTotal = afterDiscount + taxAmount;
 
   const createSale = trpc.camping.sales.create.useMutation({
     onSuccess: () => {
@@ -94,9 +102,10 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
         peopleCount,
         nights,
         services: selectedServices.map((sName) => ({ name: sName, price: CAMPING_SERVICES.find((s) => s.name === sName)?.price || 0 })),
-        spotTotal,
-        servicesTotal,
-        totalAmount,
+        subtotal,
+        discountPercent,
+        taxPercent,
+        totalAmount: grandTotal,
         paymentMethod,
         dateTime,
       });
@@ -123,6 +132,8 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
     setCheckOut("");
     setPeopleCount(2);
     setSelectedServices([]);
+    setDiscountPercent(0);
+    setTaxPercent(0);
     setPaymentMethod("cash");
     setDateTime(new Date().toISOString().slice(0, 16));
     setNote("");
@@ -144,7 +155,9 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
       nights,
       spotTotal,
       servicesTotal,
-      totalAmount,
+      totalAmount: grandTotal,
+      discountPercent,
+      taxPercent,
       paymentMethod,
       dateTime,
       note: note || undefined,
@@ -182,7 +195,10 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
         <CardContent className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
-              <Label>Customer Name</Label>
+              <Label className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Customer Name
+              </Label>
               <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer full name" />
             </div>
             <div>
@@ -217,7 +233,7 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
             <div className="p-3 rounded-lg bg-[var(--muted)]/30 text-sm">
               <p>Nights: <strong>{nights}</strong></p>
               <p>Camps: <strong>{numberOfCamps}</strong></p>
-              <p>Spot Total: <strong>Rs. {spotTotal.toLocaleString()}</strong> (Rs. {PRICE_PER_CAMP_PER_NIGHT} x {numberOfCamps} camps x {nights} nights)</p>
+              <p>Camp Total: <strong>Rs. {spotTotal.toLocaleString()}</strong></p>
             </div>
           )}
 
@@ -236,6 +252,62 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
                   </Label>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <Label className="flex items-center gap-2">
+                <Percent className="h-4 w-4" />
+                Discount (%)
+              </Label>
+              <Input 
+                type="number" 
+                step="0.01" 
+                min={0} 
+                max={100}
+                value={discountPercent} 
+                onChange={(e) => setDiscountPercent(Number(e.target.value))} 
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <Label className="flex items-center gap-2">
+                <Percent className="h-4 w-4" />
+                Sales Tax (%)
+              </Label>
+              <Input 
+                type="number" 
+                step="0.01" 
+                min={0} 
+                max={100}
+                value={taxPercent} 
+                onChange={(e) => setTaxPercent(Number(e.target.value))} 
+                placeholder="0"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-[var(--border)] pt-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Subtotal:</span>
+              <span>Rs. {subtotal.toLocaleString()}</span>
+            </div>
+            {discountPercent > 0 && (
+              <div className="flex justify-between text-sm text-green-600">
+                <span>Discount ({discountPercent}%):</span>
+                <span>- Rs. {discountAmount.toLocaleString()}</span>
+              </div>
+            )}
+            {taxPercent > 0 && (
+              <div className="flex justify-between text-sm text-orange-600">
+                <span>Sales Tax ({taxPercent}%):</span>
+                <span>+ Rs. {taxAmount.toLocaleString()}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-lg font-bold border-t border-[var(--border)] pt-2">
+              <span>Grand Total:</span>
+              <span className="text-[var(--primary)]">Rs. {grandTotal.toLocaleString()}</span>
             </div>
           </div>
 
@@ -265,19 +337,6 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
           <div>
             <Label>Note (Optional)</Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
-          </div>
-
-          <div className="border-t border-[var(--border)] pt-4">
-            <div className="flex justify-between items-center">
-              <div className="space-y-1 text-sm">
-                <p>Camp Total: Rs. {spotTotal.toLocaleString()}</p>
-                <p>Services Total: Rs. {servicesTotal.toLocaleString()}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-[var(--muted-foreground)]">Grand Total</p>
-                <p className="text-3xl font-bold text-[var(--primary)]">Rs. {totalAmount.toLocaleString()}</p>
-              </div>
-            </div>
           </div>
 
           <div className="flex gap-3">
@@ -324,9 +383,9 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
                   <tbody>
                     <tr>
                       <td className="py-1">Camp ({receiptData.nights} nights x {receiptData.numberOfCamps} camps)</td>
-                      <td className="text-right py-1">{receiptData.spotTotal.toLocaleString()}</td>
+                      <td className="text-right py-1">{receiptData.spotTotal?.toLocaleString() || 0}</td>
                     </tr>
-                    {receiptData.services.map((s: any, i: number) => (
+                    {receiptData.services?.map((s: any, i: number) => (
                       <tr key={i}>
                         <td className="py-1">{s.name}</td>
                         <td className="text-right py-1">{s.price.toLocaleString()}</td>
@@ -334,9 +393,27 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
                     ))}
                   </tbody>
                 </table>
-                <div className="border-t border-black pt-2 flex justify-between text-sm font-bold">
-                  <span>Total</span>
-                  <span>Rs. {receiptData.totalAmount.toLocaleString()}</span>
+                <div className="border-t border-black pt-2 space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span>Subtotal:</span>
+                    <span>Rs. {receiptData.subtotal?.toLocaleString() || 0}</span>
+                  </div>
+                  {receiptData.discountPercent > 0 && (
+                    <div className="flex justify-between text-xs text-green-600">
+                      <span>Discount ({receiptData.discountPercent}%):</span>
+                      <span>- Rs. {((receiptData.subtotal * receiptData.discountPercent) / 100).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {receiptData.taxPercent > 0 && (
+                    <div className="flex justify-between text-xs text-orange-600">
+                      <span>Sales Tax ({receiptData.taxPercent}%):</span>
+                      <span>+ Rs. {(((receiptData.subtotal - (receiptData.subtotal * receiptData.discountPercent) / 100) * receiptData.taxPercent) / 100).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm font-bold pt-1 border-t border-black">
+                    <span>Total:</span>
+                    <span>Rs. {receiptData.totalAmount.toLocaleString()}</span>
+                  </div>
                 </div>
                 <p className="text-center text-[10px] pt-2">Thank you for camping with us!</p>
                 <Button
