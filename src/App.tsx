@@ -6,7 +6,6 @@ import Dashboard from '@/pages/Dashboard'
 import AddSale from '@/pages/sales/AddSale'
 import AddExpense from '@/pages/expenses/AddExpense'
 import MenuPage from '@/pages/menu/MenuPage'
-import AddCampingSale from '@/pages/camping/AddCampingSale'
 import ProfitLoss from '@/pages/analysis/ProfitLoss'
 import TodayReport from '@/pages/reports/TodayReport'
 import WeeklyReport from '@/pages/reports/WeeklyReport'
@@ -43,7 +42,6 @@ function AppRoutes() {
         <Route path="/sales/add" element={<AddSale />} />
         <Route path="/expenses/add" element={<AddExpense />} />
         <Route path="/menu" element={<MenuPage />} />
-        <Route path="/camping/sales" element={<AddCampingSale />} />
         <Route path="/reports/today" element={<TodayReport />} />
         <Route path="/sales-expenses" element={<SalesExpenses />} />
         <Route path="/reports/weekly" element={<WeeklyReport />} />

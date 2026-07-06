@@ -44,9 +44,6 @@ const restaurantItems = [
   { path: "/menu", label: "Menu Management", icon: Utensils },
 ];
 
-const campingItems = [
-  { path: "/camping/sales", label: "Add Camping Sale", icon: Tent },
-];
 
 const reportItems = [
   { path: "/reports/today", label: "Today Report", icon: CalendarDays },
@@ -203,10 +200,6 @@ export function SidebarLayout({ children, isOwner }: SidebarLayoutProps) {
 
           <div className="pt-2">
             <Section title="Restaurant" icon={ChefHat} items={restaurantItems} sectionKey="restaurant" />
-          </div>
-
-          <div className="pt-1">
-            <Section title="Camping" icon={Tent} items={campingItems} sectionKey="camping" />
           </div>
 
           <div className="pt-1">
