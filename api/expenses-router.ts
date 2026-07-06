@@ -66,6 +66,46 @@ delete: authedQuery
       return { success: true };
     }),
 
+
+    createMultiple: authedQuery
+  .input(
+    z.object({
+      expenses: z.array(
+        z.object({
+          name: z.string().min(1),
+          amount: z.number(),
+          category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
+          paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
+          paidTo: z.string().optional().nullable(),
+          receiptUrl: z.string().optional(),
+          dateTime: z.string(),
+          note: z.string().optional(),
+        })
+      ),
+    })
+  )
+  .mutation(async ({ input, ctx }) => {
+    const db = getDb();
+    const results = [];
+    
+    for (const expense of input.expenses) {
+      const result = await db.insert(schema.expenses).values({
+        name: expense.name,
+        amount: expense.amount.toString(),
+        category: expense.category,
+        paymentMethod: expense.paymentMethod,
+        paidTo: expense.paidTo || null,
+        receiptUrl: expense.receiptUrl || null,
+        dateTime: new Date(expense.dateTime),
+        note: expense.note || null,
+        createdBy: ctx.user.id,
+      });
+      results.push({ id: Number(result[0].insertId) });
+    }
+    
+    return { success: true, count: results.length };
+  }),
+
     update: authedQuery
   .input(z.object({
     id: z.number(),

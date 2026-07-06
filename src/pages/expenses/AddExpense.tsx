@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { trpc } from "@/providers/trpc";
@@ -9,20 +9,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign } from "lucide-react";
+import { DollarSign, Plus, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 
-const expenseSchema = z.object({
+const expenseItemSchema = z.object({
   name: z.string().min(1, "Expense name is required"),
   amount: z.number().min(0.01, "Amount must be greater than 0"),
   category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
+});
+
+const expenseFormSchema = z.object({
+  vendorName: z.string().optional(),
+  items: z.array(expenseItemSchema).min(1, "At least one expense item is required"),
   paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
-  paidTo: z.string().optional(),
   dateTime: z.string(),
   note: z.string().optional(),
 });
 
-type ExpenseForm = z.infer<typeof expenseSchema>;
+type ExpenseForm = z.infer<typeof expenseFormSchema>;
+type ExpenseItem = z.infer<typeof expenseItemSchema>;
 
 const categories = [
   { value: "food", label: "Food" },
@@ -41,17 +46,7 @@ const paymentMethods = [
 ];
 
 interface AddExpenseProps {
-  expenseToEdit?: {
-    id: number;
-    name: string;
-    amount: number;
-    category: string;
-    paymentMethod: string;
-    paidTo?: string | null;
-    receiptUrl?: string | null;
-    dateTime: string;
-    note?: string | null;
-  };
+  expenseToEdit?: any;
   onClose?: () => void;
 }
 
@@ -61,33 +56,41 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
     setValue,
     watch,
     reset,
+    trigger,
     formState: { errors },
   } = useForm<ExpenseForm>({
-    resolver: zodResolver(expenseSchema),
+    resolver: zodResolver(expenseFormSchema),
     defaultValues: {
-      name: "",
-      amount: 0,
-      category: "other",
+      vendorName: "",
+      items: [{ name: "", amount: 0, category: "other" }],
       paymentMethod: "cash",
-      paidTo: "",
       dateTime: new Date().toISOString().slice(0, 16),
       note: "",
     },
   });
 
-  // Populate form when editing
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "items",
+  });
+
+  // Populate form when editing (for existing single expense)
   useEffect(() => {
     if (expenseToEdit) {
-      setValue("name", expenseToEdit.name);
-      setValue("amount", expenseToEdit.amount);
-      setValue("category", expenseToEdit.category as any);
-      setValue("paymentMethod", expenseToEdit.paymentMethod as any);
-      setValue("paidTo", expenseToEdit.paidTo || "");
+      // If editing a single expense, populate as one item
+      setValue("vendorName", expenseToEdit.paidTo || "");
+      setValue("items", [{
+        name: expenseToEdit.name,
+        amount: expenseToEdit.amount,
+        category: expenseToEdit.category,
+      }]);
+      setValue("paymentMethod", expenseToEdit.paymentMethod);
       const dateTimeValue = expenseToEdit.dateTime 
         ? typeof expenseToEdit.dateTime === "string" 
           ? expenseToEdit.dateTime.slice(0, 16) 
@@ -98,9 +101,9 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     }
   }, [expenseToEdit, setValue]);
 
-  const createExpense = trpc.expenses.create.useMutation({
+  const createMultipleExpenses = trpc.expenses.createMultiple.useMutation({
     onSuccess: () => {
-      toast.success("Expense recorded successfully!");
+      toast.success("Expenses recorded successfully!");
       utils.expenses.list.invalidate();
       utils.reports.dashboardSummary.invalidate();
       utils.reports.recentActivity.invalidate();
@@ -123,32 +126,45 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
 
   const onSubmit = (data: ExpenseForm) => {
     const receiptUrlValue = receiptFile ? `uploaded:${receiptFile.name}` : undefined;
-    
-    const payload = {
-      ...data,
-      receiptUrl: receiptUrlValue,
-    };
 
     if (isEditMode && expenseToEdit) {
-      updateExpense.mutate({ 
-        id: expenseToEdit.id, 
-        ...payload,
+      // Edit mode: update single expense
+      const item = data.items[0];
+      updateExpense.mutate({
+        id: expenseToEdit.id,
+        name: item.name,
+        amount: item.amount,
+        category: item.category,
+        paymentMethod: data.paymentMethod,
+        paidTo: data.vendorName || null,
+        receiptUrl: receiptUrlValue,
+        dateTime: data.dateTime,
+        note: data.note,
       });
     } else {
-      createExpense.mutate(payload);
+      // Create mode: create multiple expenses
+      const expenses = data.items.map((item) => ({
+        name: item.name,
+        amount: item.amount,
+        category: item.category,
+        paymentMethod: data.paymentMethod,
+        paidTo: data.vendorName || null,
+        receiptUrl: receiptUrlValue,
+        dateTime: data.dateTime,
+        note: data.note,
+      }));
+      createMultipleExpenses.mutate({ expenses });
     }
   };
 
-  // Get the current display value for category
-  const currentCategory = watch("category");
-  const currentPaymentMethod = watch("paymentMethod");
+  const totalAmount = watch("items").reduce((sum, item) => sum + (item.amount || 0), 0);
 
   return (
-    <div key={expenseToEdit?.id} className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold font-serif">{isEditMode ? "Update Expense" : "Add Expense"}</h1>
+        <h1 className="text-2xl font-bold font-serif">{isEditMode ? "Update Expense" : "Add Expenses"}</h1>
         <p className="text-sm text-[var(--muted-foreground)]">
-          {isEditMode ? "Update existing business expense" : "Record a new business expense"}
+          {isEditMode ? "Update existing expense" : "Add multiple expenses at once"}
         </p>
       </div>
 
@@ -156,70 +172,132 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <DollarSign className="h-5 w-5 text-[var(--primary)]" />
-            Expense Details
+            {isEditMode ? "Expense Details" : "Multiple Expenses"}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
-                <Label htmlFor="name">Expense Name</Label>
-                <Input id="name" {...register("name")} placeholder="e.g., Vegetable Purchase" />
-                {errors.name && <p className="text-xs text-[var(--destructive)] mt-1">{errors.name.message}</p>}
-              </div>
-              <div>
-                <Label htmlFor="amount">Amount (PKR)</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  {...register("amount", { valueAsNumber: true })}
-                  placeholder="0.00"
-                />
-                {errors.amount && <p className="text-xs text-[var(--destructive)] mt-1">{errors.amount.message}</p>}
-              </div>
+            {/* Vendor Name */}
+            <div>
+              <Label htmlFor="vendorName" className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Vendor Name
+              </Label>
+              <Input
+                id="vendorName"
+                {...register("vendorName")}
+                placeholder="Vendor name (optional)"
+              />
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                This name will apply to all expenses
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
-                <Label>Category</Label>
-                <Select
-                  value={currentCategory}
-                  onValueChange={(v) => setValue("category", v as ExpenseForm["category"])}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => (
-                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* Expense Items */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-base">Expense Items</Label>
+                {!isEditMode && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => append({ name: "", amount: 0, category: "other" })}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Add Expense
+                  </Button>
+                )}
               </div>
+
+              {fields.map((field, index) => (
+                <div
+                  key={field.id}
+                  className="grid grid-cols-12 gap-3 items-end p-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/30"
+                >
+                  <div className="col-span-5 sm:col-span-4">
+                    <Label className="text-xs">Expense Name</Label>
+                    <Input
+                      {...register(`items.${index}.name`)}
+                      placeholder="e.g., Vegetable Purchase"
+                    />
+                  </div>
+                  <div className="col-span-4 sm:col-span-3">
+                    <Label className="text-xs">Amount (PKR)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      {...register(`items.${index}.amount`, { valueAsNumber: true })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="col-span-3 sm:col-span-3">
+                    <Label className="text-xs">Category</Label>
+                    <Select
+                      value={watch(`items.${index}.category`)}
+                      onValueChange={(v) => setValue(`items.${index}.category`, v as any)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((c) => (
+                          <SelectItem key={c.value} value={c.value}>
+                            {c.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-12 sm:col-span-2 flex justify-end">
+                    {!isEditMode && fields.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => remove(index)}
+                      >
+                        <Trash2 className="h-4 w-4 text-[var(--destructive)]" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {errors.items?.message && (
+                <p className="text-sm text-[var(--destructive)]">{errors.items.message}</p>
+              )}
+            </div>
+
+            {/* Total */}
+            {!isEditMode && fields.length > 1 && (
+              <div className="flex justify-end">
+                <div className="text-right">
+                  <p className="text-sm text-[var(--muted-foreground)]">Total Expenses</p>
+                  <p className="text-xl font-bold text-[var(--primary)]">Rs. {totalAmount.toLocaleString()}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Payment Method, Date & Time */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
                 <Label>Payment Method</Label>
                 <Select
-                  value={currentPaymentMethod}
-                  onValueChange={(v) => setValue("paymentMethod", v as ExpenseForm["paymentMethod"])}
+                  value={watch("paymentMethod")}
+                  onValueChange={(v) => setValue("paymentMethod", v as any)}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger>
                     <SelectValue placeholder="Select payment method" />
                   </SelectTrigger>
                   <SelectContent>
                     {paymentMethods.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      <SelectItem key={m.value} value={m.value}>
+                        {m.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
-                <Label htmlFor="paidTo">Paid To</Label>
-                <Input id="paidTo" {...register("paidTo")} placeholder="Vendor name or person" />
               </div>
               <div>
                 <Label htmlFor="dateTime">Date & Time</Label>
@@ -227,6 +305,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               </div>
             </div>
 
+            {/* Receipt Upload */}
             {!isEditMode && (
               <div>
                 <Label htmlFor="receipt">Upload Receipt (Optional)</Label>
@@ -236,18 +315,31 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                   accept="image/*,.pdf"
                   onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
                 />
-                {receiptFile && <p className="text-xs text-[var(--muted-foreground)] mt-1">Selected: {receiptFile.name}</p>}
+                {receiptFile && (
+                  <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                    Selected: {receiptFile.name}
+                  </p>
+                )}
               </div>
             )}
 
+            {/* Note */}
             <div>
               <Label htmlFor="note">Note / Remarks (Optional)</Label>
               <Textarea id="note" {...register("note")} rows={3} />
             </div>
 
             <div className="flex gap-3 pt-2">
-              <Button type="submit" className="flex-1" disabled={createExpense.isPending || updateExpense.isPending}>
-                {(createExpense.isPending || updateExpense.isPending) ? "Saving..." : (isEditMode ? "Update Expense" : "Record Expense")}
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={createMultipleExpenses.isPending || updateExpense.isPending}
+              >
+                {(createMultipleExpenses.isPending || updateExpense.isPending)
+                  ? "Saving..."
+                  : isEditMode
+                  ? "Update Expense"
+                  : `Record ${fields.length} Expense${fields.length > 1 ? "s" : ""}`}
               </Button>
               {onClose && (
                 <Button type="button" variant="outline" onClick={onClose}>
