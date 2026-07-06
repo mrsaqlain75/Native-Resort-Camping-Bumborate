@@ -20,6 +20,7 @@ const saleItemSchema = z.object({
   quantity: z.number().min(1, "At least 1"),
   unitPrice: z.number().min(0, "Price must be positive"),
   total: z.number(),
+  isCamping: z.boolean().optional(),
 });
 
 const saleSchema = z.object({
@@ -39,7 +40,7 @@ interface AddSaleProps {
   saleToEdit?: {
     id: number;
     customerName?: string | null;
-    items: { name: string; quantity: number; unitPrice: number; total: number }[];
+    items: { name: string; quantity: number; unitPrice: number; total: number; isCamping?: boolean }[];
     totalAmount: number;
     discountPercent?: string | null;
     taxPercent?: string | null;
@@ -170,19 +171,38 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
     }
   };
 
-  const handleMenuSelect = (index: number, menuItemId: string) => {
-    const item = menuItems?.find((m) => m.id === Number(menuItemId));
+  const handleMenuSelect = (index: number, value: string) => {
+    // Check if it's a camping item
+    if (value === "camping") {
+      setValue(`items.${index}.name`, "🏕️ Camping");
+      setValue(`items.${index}.unitPrice`, 0);
+      setValue(`items.${index}.isCamping`, true);
+      const qty = watch(`items.${index}.quantity`) || 1;
+      updateItemTotal(index, qty, 0);
+      return;
+    }
+    
+    // Regular menu item (restaurant)
+    const item = menuItems?.find((m) => m.id === Number(value));
     if (item) {
       setValue(`items.${index}.name`, item.name);
       setValue(`items.${index}.unitPrice`, Number(item.price));
+      setValue(`items.${index}.isCamping`, false);
       const qty = watch(`items.${index}.quantity`) || 1;
       updateItemTotal(index, qty, Number(item.price));
     }
   };
 
   const getSelectedMenuItemValue = (itemName: string) => {
+    if (itemName === "🏕️ Camping") {
+      return "camping";
+    }
     const menuItem = menuItems?.find(m => m.name === itemName);
     return menuItem ? String(menuItem.id) : undefined;
+  };
+
+  const isCampingItem = (itemName: string) => {
+    return itemName === "🏕️ Camping";
   };
 
   return (
@@ -190,7 +210,7 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
       <div>
         <h1 className="text-2xl font-bold font-serif">{isEditMode ? "Update Sale" : "Add Sale"}</h1>
         <p className="text-sm text-[var(--muted-foreground)]">
-          {isEditMode ? "Update existing sale transaction" : "Record a new restaurant sale transaction"}
+          {isEditMode ? "Update existing sale transaction" : "Record a new sale (Restaurant + Camping)"}
         </p>
       </div>
 
@@ -221,12 +241,12 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
             {/* Items section */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-base">Items</Label>
+                <Label className="text-base">Items (Restaurant + Camping)</Label>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => append({ name: "", quantity: 1, unitPrice: 0, total: 0 })}
+                  onClick={() => append({ name: "", quantity: 1, unitPrice: 0, total: 0, isCamping: false })}
                 >
                   <Plus className="h-4 w-4 mr-1" /> Add Item
                 </Button>
@@ -235,21 +255,28 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
               {fields.map((field, index) => (
                 <div key={field.id} className="grid grid-cols-12 gap-3 items-end p-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/30">
                   <div className="col-span-12 sm:col-span-4">
-                    <Label className="text-xs">Menu Item</Label>
+                    <Label className="text-xs">Select Item</Label>
                     <Select 
                       key={`menu-select-${index}-${saleToEdit?.id}`}
                       defaultValue={getSelectedMenuItemValue(watch(`items.${index}.name`))}
                       onValueChange={(val) => handleMenuSelect(index, val)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select from menu" />
+                        <SelectValue placeholder="Select item" />
                       </SelectTrigger>
                       <SelectContent>
+                        {/* Restaurant items */}
+                        <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">🍽️ Restaurant</div>
                         {menuItems?.map((item) => (
                           <SelectItem key={item.id} value={String(item.id)}>
                             {item.name} — Rs. {Number(item.price)}
                           </SelectItem>
                         ))}
+                        {/* Camping option */}
+                        <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">🏕️ Camping</div>
+                        <SelectItem value="camping">
+                          🏕️ Camping (Set price manually)
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -282,6 +309,7 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
                         setValue(`items.${index}.unitPrice`, price);
                         updateItemTotal(index, watch(`items.${index}.quantity`) || 1, price);
                       }}
+                      placeholder="Enter price"
                     />
                   </div>
                   <div className="col-span-12 sm:col-span-1 flex justify-end">
@@ -292,6 +320,9 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
                     )}
                   </div>
                   <div className="col-span-12 text-right text-sm font-medium">
+                    {watch(`items.${index}.isCamping`) && (
+                      <span className="text-xs text-blue-500 mr-2">🏕️ Camping</span>
+                    )}
                     Line Total: Rs. {(watch(`items.${index}.total`) || 0).toLocaleString()}
                   </div>
                 </div>
@@ -465,7 +496,12 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
                   <tbody>
                     {receiptSale.items.map((item: any, i: number) => (
                       <tr key={i}>
-                        <td className="py-1">{item.name}</td>
+                        <td className="py-1">
+                          {item.isCamping && (
+                            <span className="text-blue-500">🏕️ </span>
+                          )}
+                          {item.name}
+                        </td>
                         <td className="text-center py-1">{item.quantity}</td>
                         <td className="text-right py-1">{item.unitPrice.toLocaleString()}</td>
                         <td className="text-right py-1">{item.total.toLocaleString()}</td>
