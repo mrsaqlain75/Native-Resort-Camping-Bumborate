@@ -7,19 +7,17 @@ import { eq, desc, gte, lte, and, sql } from "drizzle-orm";
 export const expensesRouter = createRouter({
 
   list: authedQuery.query(async () => {
-  const db = getDb();
-  return db.select().from(schema.expenses).orderBy(desc(schema.expenses.dateTime));
-}),
-
-delete: authedQuery
-  .input(z.object({ id: z.number() }))
-  .mutation(async ({ input }) => {
     const db = getDb();
-    await db.delete(schema.expenses).where(eq(schema.expenses.id, input.id));
-    return { success: true };
+    return db.select().from(schema.expenses).orderBy(desc(schema.expenses.dateTime));
   }),
 
-
+  delete: authedQuery
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await db.delete(schema.expenses).where(eq(schema.expenses.id, input.id));
+      return { success: true };
+    }),
 
   listByDateRange: authedQuery
     .input(z.object({ from: z.string(), to: z.string() }))
@@ -42,6 +40,7 @@ delete: authedQuery
       z.object({
         name: z.string().min(1),
         amount: z.number(),
+        quantity: z.string().optional().default(""),
         category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
         paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
         paidTo: z.string().optional(),
@@ -55,6 +54,7 @@ delete: authedQuery
       await db.insert(schema.expenses).values({
         name: input.name,
         amount: input.amount.toFixed(2),
+        quantity: input.quantity || "",
         category: input.category,
         paymentMethod: input.paymentMethod,
         paidTo: input.paidTo || null,
@@ -66,74 +66,77 @@ delete: authedQuery
       return { success: true };
     }),
 
-
-    createMultiple: authedQuery
-  .input(
-    z.object({
-      expenses: z.array(
-        z.object({
-          name: z.string().min(1),
-          amount: z.number(),
-          category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
-          paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
-          paidTo: z.string().optional().nullable(),
-          receiptUrl: z.string().optional(),
-          dateTime: z.string(),
-          note: z.string().optional(),
-        })
-      ),
-    })
-  )
-  .mutation(async ({ input, ctx }) => {
-    const db = getDb();
-    const results = [];
-    
-    for (const expense of input.expenses) {
-      const result = await db.insert(schema.expenses).values({
-        name: expense.name,
-        amount: expense.amount.toString(),
-        category: expense.category,
-        paymentMethod: expense.paymentMethod,
-        paidTo: expense.paidTo || null,
-        receiptUrl: expense.receiptUrl || null,
-        dateTime: new Date(expense.dateTime),
-        note: expense.note || null,
-        createdBy: ctx.user.id,
-      });
-      results.push({ id: Number(result[0].insertId) });
-    }
-    
-    return { success: true, count: results.length };
-  }),
-
-    update: authedQuery
-  .input(z.object({
-    id: z.number(),
-    name: z.string(),
-    amount: z.number(),
-    category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
-    paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
-    paidTo: z.string().optional(),
-    receiptUrl: z.string().optional(),
-    dateTime: z.string(),
-    note: z.string().optional(),
-  }))
-  .mutation(async ({ input }) => {
-    const db = getDb();
-    await db.update(schema.expenses)
-      .set({
-        name: input.name,
-        amount: input.amount.toString(),
-        category: input.category,
-        paymentMethod: input.paymentMethod,
-        paidTo: input.paidTo || null,
-        receiptUrl: input.receiptUrl || null,
-        dateTime: new Date(input.dateTime),
-        note: input.note || null,
+  createMultiple: authedQuery
+    .input(
+      z.object({
+        expenses: z.array(
+          z.object({
+            name: z.string().min(1),
+            amount: z.number(),
+            quantity: z.string().optional().default(""),
+            category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
+            paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
+            paidTo: z.string().optional().nullable(),
+            receiptUrl: z.string().optional(),
+            dateTime: z.string(),
+            note: z.string().optional(),
+          })
+        ),
       })
-      .where(eq(schema.expenses.id, input.id));
-    return { success: true };
-  }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const results = [];
+      
+      for (const expense of input.expenses) {
+        const result = await db.insert(schema.expenses).values({
+          name: expense.name,
+          amount: expense.amount.toString(),
+          quantity: expense.quantity || "",
+          category: expense.category,
+          paymentMethod: expense.paymentMethod,
+          paidTo: expense.paidTo || null,
+          receiptUrl: expense.receiptUrl || null,
+          dateTime: new Date(expense.dateTime),
+          note: expense.note || null,
+          createdBy: ctx.user.id,
+        });
+        results.push({ id: Number(result[0].insertId) });
+      }
+      
+      return { success: true, count: results.length };
+    }),
+
+  update: authedQuery
+    .input(z.object({
+      id: z.number(),
+      name: z.string(),
+      amount: z.number(),
+      quantity: z.string().optional(),
+      category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
+      paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
+      paidTo: z.string().optional(),
+      receiptUrl: z.string().optional(),
+      dateTime: z.string(),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await db.update(schema.expenses)
+        .set({
+          name: input.name,
+          amount: input.amount.toString(),
+          quantity: input.quantity || "",
+          category: input.category,
+          paymentMethod: input.paymentMethod,
+          paidTo: input.paidTo || null,
+          receiptUrl: input.receiptUrl || null,
+          dateTime: new Date(input.dateTime),
+          note: input.note || null,
+        })
+        .where(eq(schema.expenses.id, input.id));
+      return { success: true };
+    }),
 
   todaySummary: authedQuery.query(async () => {
     const db = getDb();
@@ -225,8 +228,8 @@ delete: authedQuery
       .from(schema.expenses)
       .groupBy(sql`YEAR(${schema.expenses.dateTime})`)
       .orderBy(sql`YEAR(${schema.expenses.dateTime})`);
-      return rows;
-    }),
+    return rows;
+  }),
 
   categoryBreakdown: authedQuery
     .input(z.object({ from: z.string(), to: z.string() }))

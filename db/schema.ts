@@ -68,6 +68,7 @@ export const expenses = mysqlTable("expenses", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  quantity: varchar("quantity", { length: 50 }).default(""), // New field
   category: mysqlEnum("category", ["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]).notNull(),
   paymentMethod: mysqlEnum("payment_method", ["cash", "e_transaction", "bank_transfer"]).notNull(),
   paidTo: varchar("paid_to", { length: 255 }),

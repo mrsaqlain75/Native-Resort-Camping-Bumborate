@@ -9,12 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, Plus, Trash2, User } from "lucide-react";
+import { DollarSign, Plus, Trash2, User, Package } from "lucide-react";
 import { toast } from "sonner";
 
 const expenseItemSchema = z.object({
   name: z.string().min(1, "Expense name is required"),
   amount: z.number().min(0.01, "Amount must be greater than 0"),
+  quantity: z.string().optional(),
   category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
 });
 
@@ -27,7 +28,6 @@ const expenseFormSchema = z.object({
 });
 
 type ExpenseForm = z.infer<typeof expenseFormSchema>;
-type ExpenseItem = z.infer<typeof expenseItemSchema>;
 
 const categories = [
   { value: "food", label: "Food" },
@@ -68,7 +68,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       vendorName: "",
-      items: [{ name: "", amount: 0, category: "other" }],
+      items: [{ name: "", amount: 0, quantity: "", category: "other" }],
       paymentMethod: "cash",
       dateTime: new Date().toISOString().slice(0, 16),
       note: "",
@@ -80,14 +80,13 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     name: "items",
   });
 
-  // Populate form when editing (for existing single expense)
   useEffect(() => {
     if (expenseToEdit) {
-      // If editing a single expense, populate as one item
       setValue("vendorName", expenseToEdit.paidTo || "");
       setValue("items", [{
         name: expenseToEdit.name,
         amount: expenseToEdit.amount,
+        quantity: expenseToEdit.quantity || "",
         category: expenseToEdit.category,
       }]);
       setValue("paymentMethod", expenseToEdit.paymentMethod);
@@ -128,12 +127,12 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     const receiptUrlValue = receiptFile ? `uploaded:${receiptFile.name}` : undefined;
 
     if (isEditMode && expenseToEdit) {
-      // Edit mode: update single expense
       const item = data.items[0];
       updateExpense.mutate({
         id: expenseToEdit.id,
         name: item.name,
         amount: item.amount,
+        quantity: item.quantity || "",
         category: item.category,
         paymentMethod: data.paymentMethod,
         paidTo: data.vendorName || null,
@@ -142,10 +141,10 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         note: data.note,
       });
     } else {
-      // Create mode: create multiple expenses
       const expenses = data.items.map((item) => ({
         name: item.name,
         amount: item.amount,
+        quantity: item.quantity || "",
         category: item.category,
         paymentMethod: data.paymentMethod,
         paidTo: data.vendorName || null,
@@ -177,7 +176,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            {/* Vendor Name */}
             <div>
               <Label htmlFor="vendorName" className="flex items-center gap-2">
                 <User className="h-4 w-4" />
@@ -193,7 +191,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               </p>
             </div>
 
-            {/* Expense Items */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-base">Expense Items</Label>
@@ -202,7 +199,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => append({ name: "", amount: 0, category: "other" })}
+                    onClick={() => append({ name: "", amount: 0, quantity: "", category: "other" })}
                   >
                     <Plus className="h-4 w-4 mr-1" /> Add Expense
                   </Button>
@@ -214,14 +211,14 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                   key={field.id}
                   className="grid grid-cols-12 gap-3 items-end p-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/30"
                 >
-                  <div className="col-span-5 sm:col-span-4">
+                  <div className="col-span-4 sm:col-span-3">
                     <Label className="text-xs">Expense Name</Label>
                     <Input
                       {...register(`items.${index}.name`)}
                       placeholder="e.g., Vegetable Purchase"
                     />
                   </div>
-                  <div className="col-span-4 sm:col-span-3">
+                  <div className="col-span-3 sm:col-span-2">
                     <Label className="text-xs">Amount (PKR)</Label>
                     <Input
                       type="number"
@@ -229,6 +226,16 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                       min={0}
                       {...register(`items.${index}.amount`, { valueAsNumber: true })}
                       placeholder="0.00"
+                    />
+                  </div>
+                  <div className="col-span-2 sm:col-span-2">
+                    <Label className="text-xs flex items-center gap-1">
+                      <Package className="h-3 w-3" />
+                      Qty
+                    </Label>
+                    <Input
+                      {...register(`items.${index}.quantity`)}
+                      placeholder="e.g., 5 kg"
                     />
                   </div>
                   <div className="col-span-3 sm:col-span-3">
@@ -269,7 +276,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               )}
             </div>
 
-            {/* Total */}
             {!isEditMode && fields.length > 1 && (
               <div className="flex justify-end">
                 <div className="text-right">
@@ -279,7 +285,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               </div>
             )}
 
-            {/* Payment Method, Date & Time */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
                 <Label>Payment Method</Label>
@@ -305,7 +310,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               </div>
             </div>
 
-            {/* Receipt Upload */}
             {!isEditMode && (
               <div>
                 <Label htmlFor="receipt">Upload Receipt (Optional)</Label>
@@ -323,7 +327,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               </div>
             )}
 
-            {/* Note */}
             <div>
               <Label htmlFor="note">Note / Remarks (Optional)</Label>
               <Textarea id="note" {...register("note")} rows={3} />

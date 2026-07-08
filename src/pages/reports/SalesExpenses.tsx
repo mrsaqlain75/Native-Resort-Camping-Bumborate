@@ -317,6 +317,7 @@ export default function SalesExpenses() {
                       {view === "expenses" && (
                         <>
                           <TableHead>Expense Name</TableHead>
+                          <TableHead>Qty</TableHead>
                           <TableHead>Category</TableHead>
                           <TableHead>Paid To</TableHead>
                           <TableHead>Payment</TableHead>
@@ -379,6 +380,7 @@ export default function SalesExpenses() {
                         {record.type === "expenses" && (
                           <>
                             <TableCell>{record.name}</TableCell>
+                            <TableCell>{record.quantity || "-"}</TableCell>
                             <TableCell>
                               <Badge variant="outline" className="capitalize">{record.category}</Badge>
                             </TableCell>
