@@ -39,8 +39,9 @@ export const expensesRouter = createRouter({
     .input(
       z.object({
         name: z.string().min(1),
-        amount: z.number(),
+        amount: z.number(), // Unit price
         quantity: z.number().int().min(0).default(0),
+        total: z.number().default(0), // Total = amount × quantity
         category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
         paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
         paidTo: z.string().optional(),
@@ -55,6 +56,7 @@ export const expensesRouter = createRouter({
         name: input.name,
         amount: input.amount.toFixed(2),
         quantity: input.quantity || 0,
+        total: input.total.toFixed(2),
         category: input.category,
         paymentMethod: input.paymentMethod,
         paidTo: input.paidTo || null,
@@ -74,6 +76,7 @@ export const expensesRouter = createRouter({
             name: z.string().min(1),
             amount: z.number(),
             quantity: z.number().int().min(0).default(0),
+            total: z.number().default(0),
             category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
             paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
             paidTo: z.string().optional().nullable(),
@@ -93,6 +96,7 @@ export const expensesRouter = createRouter({
           name: expense.name,
           amount: expense.amount.toString(),
           quantity: expense.quantity || 0,
+          total: expense.total.toString(),
           category: expense.category,
           paymentMethod: expense.paymentMethod,
           paidTo: expense.paidTo || null,
@@ -113,6 +117,7 @@ export const expensesRouter = createRouter({
       name: z.string(),
       amount: z.number(),
       quantity: z.number().int().min(0).optional(),
+      total: z.number().optional(),
       category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
       paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
       paidTo: z.string().optional(),
@@ -122,11 +127,13 @@ export const expensesRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      const total = input.total || (input.amount * (input.quantity || 0));
       await db.update(schema.expenses)
         .set({
           name: input.name,
           amount: input.amount.toString(),
           quantity: input.quantity || 0,
+          total: total.toString(),
           category: input.category,
           paymentMethod: input.paymentMethod,
           paidTo: input.paidTo || null,
@@ -144,7 +151,7 @@ export const expensesRouter = createRouter({
     today.setHours(0, 0, 0, 0);
     const rows = await db
       .select({
-        total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+        total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)`,
         count: sql<number>`COUNT(*)`,
       })
       .from(schema.expenses)
@@ -158,7 +165,7 @@ export const expensesRouter = createRouter({
       const db = getDb();
       const rows = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)`,
           count: sql<number>`COUNT(*)`,
         })
         .from(schema.expenses)
@@ -178,7 +185,7 @@ export const expensesRouter = createRouter({
       const rows = await db
         .select({
           date: sql<string>`DATE(${schema.expenses.dateTime})`,
-          total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)`,
           count: sql<number>`COUNT(*)`,
         })
         .from(schema.expenses)
@@ -202,7 +209,7 @@ export const expensesRouter = createRouter({
       const rows = await db
         .select({
           month: sql<number>`MONTH(${schema.expenses.dateTime})`,
-          total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)`,
           count: sql<number>`COUNT(*)`,
         })
         .from(schema.expenses)
@@ -222,7 +229,7 @@ export const expensesRouter = createRouter({
     const rows = await db
       .select({
         year: sql<number>`YEAR(${schema.expenses.dateTime})`,
-        total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+        total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)`,
         count: sql<number>`COUNT(*)`,
       })
       .from(schema.expenses)
@@ -238,7 +245,7 @@ export const expensesRouter = createRouter({
       const rows = await db
         .select({
           category: schema.expenses.category,
-          total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)`,
           count: sql<number>`COUNT(*)`,
         })
         .from(schema.expenses)

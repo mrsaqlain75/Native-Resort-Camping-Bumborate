@@ -317,11 +317,12 @@ export default function SalesExpenses() {
                       {view === "expenses" && (
                         <>
                           <TableHead>Expense Name</TableHead>
+                          <TableHead>Unit Price</TableHead>
                           <TableHead>Qty</TableHead>
+                          <TableHead>Total</TableHead>
                           <TableHead>Category</TableHead>
                           <TableHead>Paid To</TableHead>
                           <TableHead>Payment</TableHead>
-                          <TableHead>Amount</TableHead>
                         </>
                       )}
                       <TableHead>Actions</TableHead>
@@ -380,7 +381,11 @@ export default function SalesExpenses() {
                         {record.type === "expenses" && (
                           <>
                             <TableCell>{record.name}</TableCell>
-                            <TableCell>{record.quantity || "-"}</TableCell>
+                            <TableCell>Rs. {Number(record.amount).toLocaleString()}</TableCell>
+                            <TableCell>{record.quantity || 0}</TableCell>
+                            <TableCell className="font-bold text-[var(--primary)]">
+                              Rs. {Number(record.total || (record.amount * (record.quantity || 1))).toLocaleString()}
+                            </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="capitalize">{record.category}</Badge>
                             </TableCell>
@@ -389,9 +394,6 @@ export default function SalesExpenses() {
                               <Badge variant="outline">
                                 {record.paymentMethod === "cash" ? "Cash" : record.paymentMethod === "e_transaction" ? "E-Transaction" : "Bank Transfer"}
                               </Badge>
-                            </TableCell>
-                            <TableCell className="text-red-600 font-semibold">
-                              -{formatAmount(record.amount)}
                             </TableCell>
                           </>
                         )}

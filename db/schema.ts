@@ -67,8 +67,9 @@ export type InsertSale = typeof sales.$inferInsert;
 export const expenses = mysqlTable("expenses", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
-  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
-  quantity: int("quantity").default(0), // Changed from varchar to int
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(), // Unit price
+  quantity: int("quantity").default(0), // Quantity
+  total: decimal("total", { precision: 12, scale: 2 }).default("0"), // Total = amount × quantity
   category: mysqlEnum("category", ["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]).notNull(),
   paymentMethod: mysqlEnum("payment_method", ["cash", "e_transaction", "bank_transfer"]).notNull(),
   paidTo: varchar("paid_to", { length: 255 }),

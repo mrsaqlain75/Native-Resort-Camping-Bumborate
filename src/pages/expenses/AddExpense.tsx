@@ -88,7 +88,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         name: expenseToEdit.name,
         unitPrice: expenseToEdit.amount,
         quantity: expenseToEdit.quantity || 0,
-        total: expenseToEdit.amount * (expenseToEdit.quantity || 1),
+        total: expenseToEdit.total || (expenseToEdit.amount * (expenseToEdit.quantity || 1)),
         category: expenseToEdit.category,
       }]);
       setValue("paymentMethod", expenseToEdit.paymentMethod);
@@ -102,7 +102,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     }
   }, [expenseToEdit, setValue]);
 
-  // Calculate item total whenever unitPrice or quantity changes
   const updateItemTotal = (index: number) => {
     const unitPrice = watch(`items.${index}.unitPrice`) || 0;
     const quantity = watch(`items.${index}.quantity`) || 0;
@@ -142,6 +141,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         name: item.name,
         amount: item.unitPrice,
         quantity: item.quantity || 0,
+        total: item.total || (item.unitPrice * (item.quantity || 0)),
         category: item.category,
         paymentMethod: data.paymentMethod,
         paidTo: data.vendorName || null,
@@ -154,6 +154,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         name: item.name,
         amount: item.unitPrice,
         quantity: item.quantity || 0,
+        total: item.total || (item.unitPrice * (item.quantity || 0)),
         category: item.category,
         paymentMethod: data.paymentMethod,
         paidTo: data.vendorName || null,
@@ -271,7 +272,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                   </div>
                   <div className="col-span-12 sm:col-span-3">
                     <Label className="text-xs text-right block">Total</Label>
-                    <div className="text-sm font-medium text-[var(--primary)] h-10 flex items-center">
+                    <div className="text-sm font-bold text-[var(--primary)] h-10 flex items-center">
                       Rs. {(watch(`items.${index}.total`) || 0).toLocaleString()}
                     </div>
                   </div>
