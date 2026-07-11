@@ -40,7 +40,7 @@ export const expensesRouter = createRouter({
       z.object({
         name: z.string().min(1),
         amount: z.number(),
-        quantity: z.string().optional().default(""),
+        quantity: z.number().int().min(0).default(0),
         category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
         paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
         paidTo: z.string().optional(),
@@ -54,7 +54,7 @@ export const expensesRouter = createRouter({
       await db.insert(schema.expenses).values({
         name: input.name,
         amount: input.amount.toFixed(2),
-        quantity: input.quantity || "",
+        quantity: input.quantity || 0,
         category: input.category,
         paymentMethod: input.paymentMethod,
         paidTo: input.paidTo || null,
@@ -73,7 +73,7 @@ export const expensesRouter = createRouter({
           z.object({
             name: z.string().min(1),
             amount: z.number(),
-            quantity: z.string().optional().default(""),
+            quantity: z.number().int().min(0).default(0),
             category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
             paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
             paidTo: z.string().optional().nullable(),
@@ -92,7 +92,7 @@ export const expensesRouter = createRouter({
         const result = await db.insert(schema.expenses).values({
           name: expense.name,
           amount: expense.amount.toString(),
-          quantity: expense.quantity || "",
+          quantity: expense.quantity || 0,
           category: expense.category,
           paymentMethod: expense.paymentMethod,
           paidTo: expense.paidTo || null,
@@ -112,7 +112,7 @@ export const expensesRouter = createRouter({
       id: z.number(),
       name: z.string(),
       amount: z.number(),
-      quantity: z.string().optional(),
+      quantity: z.number().int().min(0).optional(),
       category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
       paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
       paidTo: z.string().optional(),
@@ -126,7 +126,7 @@ export const expensesRouter = createRouter({
         .set({
           name: input.name,
           amount: input.amount.toString(),
-          quantity: input.quantity || "",
+          quantity: input.quantity || 0,
           category: input.category,
           paymentMethod: input.paymentMethod,
           paidTo: input.paidTo || null,

@@ -14,8 +14,9 @@ import { toast } from "sonner";
 
 const expenseItemSchema = z.object({
   name: z.string().min(1, "Expense name is required"),
-  amount: z.number().min(0.01, "Amount must be greater than 0"),
-  quantity: z.string().optional(),
+  unitPrice: z.number().min(0, "Price must be 0 or greater"),
+  quantity: z.number().int().min(0, "Quantity must be 0 or greater"),
+  total: z.number(),
   category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
 });
 
@@ -68,7 +69,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       vendorName: "",
-      items: [{ name: "", amount: 0, quantity: "", category: "other" }],
+      items: [{ name: "", unitPrice: 0, quantity: 0, total: 0, category: "other" }],
       paymentMethod: "cash",
       dateTime: new Date().toISOString().slice(0, 16),
       note: "",
@@ -85,8 +86,9 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
       setValue("vendorName", expenseToEdit.paidTo || "");
       setValue("items", [{
         name: expenseToEdit.name,
-        amount: expenseToEdit.amount,
-        quantity: expenseToEdit.quantity || "",
+        unitPrice: expenseToEdit.amount,
+        quantity: expenseToEdit.quantity || 0,
+        total: expenseToEdit.amount * (expenseToEdit.quantity || 1),
         category: expenseToEdit.category,
       }]);
       setValue("paymentMethod", expenseToEdit.paymentMethod);
@@ -99,6 +101,13 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
       setValue("note", expenseToEdit.note || "");
     }
   }, [expenseToEdit, setValue]);
+
+  // Calculate item total whenever unitPrice or quantity changes
+  const updateItemTotal = (index: number) => {
+    const unitPrice = watch(`items.${index}.unitPrice`) || 0;
+    const quantity = watch(`items.${index}.quantity`) || 0;
+    setValue(`items.${index}.total`, unitPrice * quantity);
+  };
 
   const createMultipleExpenses = trpc.expenses.createMultiple.useMutation({
     onSuccess: () => {
@@ -131,8 +140,8 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
       updateExpense.mutate({
         id: expenseToEdit.id,
         name: item.name,
-        amount: item.amount,
-        quantity: item.quantity || "",
+        amount: item.unitPrice,
+        quantity: item.quantity || 0,
         category: item.category,
         paymentMethod: data.paymentMethod,
         paidTo: data.vendorName || null,
@@ -143,8 +152,8 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     } else {
       const expenses = data.items.map((item) => ({
         name: item.name,
-        amount: item.amount,
-        quantity: item.quantity || "",
+        amount: item.unitPrice,
+        quantity: item.quantity || 0,
         category: item.category,
         paymentMethod: data.paymentMethod,
         paidTo: data.vendorName || null,
@@ -156,7 +165,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     }
   };
 
-  const totalAmount = watch("items").reduce((sum, item) => sum + (item.amount || 0), 0);
+  const grandTotal = watch("items").reduce((sum, item) => sum + (item.total || 0), 0);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -199,7 +208,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => append({ name: "", amount: 0, quantity: "", category: "other" })}
+                    onClick={() => append({ name: "", unitPrice: 0, quantity: 0, total: 0, category: "other" })}
                   >
                     <Plus className="h-4 w-4 mr-1" /> Add Expense
                   </Button>
@@ -215,27 +224,31 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                     <Label className="text-xs">Expense Name</Label>
                     <Input
                       {...register(`items.${index}.name`)}
-                      placeholder="e.g., Vegetable Purchase"
+                      placeholder="e.g., Coca Cola"
                     />
                   </div>
-                  <div className="col-span-3 sm:col-span-2">
-                    <Label className="text-xs">Amount (PKR)</Label>
+                  <div className="col-span-2 sm:col-span-2">
+                    <Label className="text-xs">Unit Price (PKR)</Label>
                     <Input
                       type="number"
                       step="0.01"
                       min={0}
-                      {...register(`items.${index}.amount`, { valueAsNumber: true })}
+                      {...register(`items.${index}.unitPrice`, { valueAsNumber: true })}
+                      onChange={() => updateItemTotal(index)}
                       placeholder="0.00"
                     />
                   </div>
-                  <div className="col-span-2 sm:col-span-2">
+                  <div className="col-span-2 sm:col-span-1">
                     <Label className="text-xs flex items-center gap-1">
                       <Package className="h-3 w-3" />
                       Qty
                     </Label>
                     <Input
-                      {...register(`items.${index}.quantity`)}
-                      placeholder="e.g., 5 kg"
+                      type="number"
+                      min={0}
+                      {...register(`items.${index}.quantity`, { valueAsNumber: true })}
+                      onChange={() => updateItemTotal(index)}
+                      placeholder="0"
                     />
                   </div>
                   <div className="col-span-3 sm:col-span-3">
@@ -256,12 +269,19 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="col-span-12 sm:col-span-2 flex justify-end">
+                  <div className="col-span-12 sm:col-span-3">
+                    <Label className="text-xs text-right block">Total</Label>
+                    <div className="text-sm font-medium text-[var(--primary)] h-10 flex items-center">
+                      Rs. {(watch(`items.${index}.total`) || 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="col-span-12 sm:col-span-1 flex justify-end items-end">
                     {!isEditMode && fields.length > 1 && (
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
+                        className="mb-0.5"
                         onClick={() => remove(index)}
                       >
                         <Trash2 className="h-4 w-4 text-[var(--destructive)]" />
@@ -276,11 +296,12 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               )}
             </div>
 
-            {!isEditMode && fields.length > 1 && (
-              <div className="flex justify-end">
+            {/* Grand Total */}
+            {!isEditMode && fields.length > 0 && (
+              <div className="flex justify-end border-t border-[var(--border)] pt-4">
                 <div className="text-right">
-                  <p className="text-sm text-[var(--muted-foreground)]">Total Expenses</p>
-                  <p className="text-xl font-bold text-[var(--primary)]">Rs. {totalAmount.toLocaleString()}</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">Grand Total</p>
+                  <p className="text-2xl font-bold text-[var(--primary)]">Rs. {grandTotal.toLocaleString()}</p>
                 </div>
               </div>
             )}
