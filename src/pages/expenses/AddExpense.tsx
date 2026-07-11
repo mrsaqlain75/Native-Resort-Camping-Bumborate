@@ -17,11 +17,11 @@ const expenseItemSchema = z.object({
   unitPrice: z.number().min(0, "Price must be 0 or greater"),
   quantity: z.number().int().min(0, "Quantity must be 0 or greater"),
   total: z.number(),
-  category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
 });
 
 const expenseFormSchema = z.object({
   vendorName: z.string().optional(),
+  category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
   items: z.array(expenseItemSchema).min(1, "At least one expense item is required"),
   paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
   dateTime: z.string(),
@@ -69,7 +69,8 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       vendorName: "",
-      items: [{ name: "", unitPrice: 0, quantity: 0, total: 0, category: "other" }],
+      category: "other",
+      items: [{ name: "", unitPrice: 0, quantity: 0, total: 0 }],
       paymentMethod: "cash",
       dateTime: new Date().toISOString().slice(0, 16),
       note: "",
@@ -84,12 +85,12 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
   useEffect(() => {
     if (expenseToEdit) {
       setValue("vendorName", expenseToEdit.paidTo || "");
+      setValue("category", expenseToEdit.category);
       setValue("items", [{
         name: expenseToEdit.name,
         unitPrice: expenseToEdit.amount,
         quantity: expenseToEdit.quantity || 0,
         total: expenseToEdit.total || (expenseToEdit.amount * (expenseToEdit.quantity || 1)),
-        category: expenseToEdit.category,
       }]);
       setValue("paymentMethod", expenseToEdit.paymentMethod);
       const dateTimeValue = expenseToEdit.dateTime 
@@ -102,11 +103,20 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     }
   }, [expenseToEdit, setValue]);
 
-  const updateItemTotal = (index: number) => {
-    const unitPrice = watch(`items.${index}.unitPrice`) || 0;
-    const quantity = watch(`items.${index}.quantity`) || 0;
-    setValue(`items.${index}.total`, unitPrice * quantity);
-  };
+  // Watch items array for changes to recalculate totals
+  const watchedItems = watch("items");
+
+  // Calculate total for each item and grand total
+  const itemsWithTotals = watchedItems.map((item, index) => {
+    const total = (item.unitPrice || 0) * (item.quantity || 0);
+    // Update the form value if it doesn't match
+    if (item.total !== total) {
+      setValue(`items.${index}.total`, total);
+    }
+    return { ...item, total };
+  });
+
+  const grandTotal = itemsWithTotals.reduce((sum, item) => sum + (item.total || 0), 0);
 
   const createMultipleExpenses = trpc.expenses.createMultiple.useMutation({
     onSuccess: () => {
@@ -142,7 +152,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         amount: item.unitPrice,
         quantity: item.quantity || 0,
         total: item.total || (item.unitPrice * (item.quantity || 0)),
-        category: item.category,
+        category: data.category,
         paymentMethod: data.paymentMethod,
         paidTo: data.vendorName || null,
         receiptUrl: receiptUrlValue,
@@ -155,7 +165,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         amount: item.unitPrice,
         quantity: item.quantity || 0,
         total: item.total || (item.unitPrice * (item.quantity || 0)),
-        category: item.category,
+        category: data.category,
         paymentMethod: data.paymentMethod,
         paidTo: data.vendorName || null,
         receiptUrl: receiptUrlValue,
@@ -165,8 +175,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
       createMultipleExpenses.mutate({ expenses });
     }
   };
-
-  const grandTotal = watch("items").reduce((sum, item) => sum + (item.total || 0), 0);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -186,21 +194,49 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div>
-              <Label htmlFor="vendorName" className="flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Vendor Name
-              </Label>
-              <Input
-                id="vendorName"
-                {...register("vendorName")}
-                placeholder="Vendor name (optional)"
-              />
-              <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                This name will apply to all expenses
-              </p>
+            {/* Vendor Name and Category - Global fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <Label htmlFor="vendorName" className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Vendor Name
+                </Label>
+                <Input
+                  id="vendorName"
+                  {...register("vendorName")}
+                  placeholder="Vendor name (optional)"
+                />
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                  This name will apply to all expenses
+                </p>
+              </div>
+              <div>
+                <Label className="flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  Category
+                </Label>
+                <Select
+                  value={watch("category")}
+                  onValueChange={(v) => setValue("category", v as any)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                  This category will apply to all expenses
+                </p>
+              </div>
             </div>
 
+            {/* Expense Items */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-base">Expense Items</Label>
@@ -209,88 +245,81 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => append({ name: "", unitPrice: 0, quantity: 0, total: 0, category: "other" })}
+                    onClick={() => append({ name: "", unitPrice: 0, quantity: 0, total: 0 })}
                   >
                     <Plus className="h-4 w-4 mr-1" /> Add Expense
                   </Button>
                 )}
               </div>
 
-              {fields.map((field, index) => (
-                <div
-                  key={field.id}
-                  className="grid grid-cols-12 gap-3 items-end p-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/30"
-                >
-                  <div className="col-span-4 sm:col-span-3">
-                    <Label className="text-xs">Expense Name</Label>
-                    <Input
-                      {...register(`items.${index}.name`)}
-                      placeholder="e.g., Coca Cola"
-                    />
-                  </div>
-                  <div className="col-span-2 sm:col-span-2">
-                    <Label className="text-xs">Unit Price (PKR)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min={0}
-                      {...register(`items.${index}.unitPrice`, { valueAsNumber: true })}
-                      onChange={() => updateItemTotal(index)}
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div className="col-span-2 sm:col-span-1">
-                    <Label className="text-xs flex items-center gap-1">
-                      <Package className="h-3 w-3" />
-                      Qty
-                    </Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      {...register(`items.${index}.quantity`, { valueAsNumber: true })}
-                      onChange={() => updateItemTotal(index)}
-                      placeholder="0"
-                    />
-                  </div>
-                  <div className="col-span-3 sm:col-span-3">
-                    <Label className="text-xs">Category</Label>
-                    <Select
-                      value={watch(`items.${index}.category`)}
-                      onValueChange={(v) => setValue(`items.${index}.category`, v as any)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((c) => (
-                          <SelectItem key={c.value} value={c.value}>
-                            {c.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-12 sm:col-span-3">
-                    <Label className="text-xs text-right block">Total</Label>
-                    <div className="text-sm font-bold text-[var(--primary)] h-10 flex items-center">
-                      Rs. {(watch(`items.${index}.total`) || 0).toLocaleString()}
+              {fields.map((field, index) => {
+                const itemTotal = watch(`items.${index}.total`) || 0;
+                return (
+                  <div
+                    key={field.id}
+                    className="grid grid-cols-12 gap-3 items-end p-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/30"
+                  >
+                    <div className="col-span-4 sm:col-span-4">
+                      <Label className="text-xs">Expense Name</Label>
+                      <Input
+                        {...register(`items.${index}.name`)}
+                        placeholder="e.g., Coca Cola"
+                      />
+                    </div>
+                    <div className="col-span-2 sm:col-span-2">
+                      <Label className="text-xs">Unit Price (PKR)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        {...register(`items.${index}.unitPrice`, { valueAsNumber: true })}
+                        onChange={() => {
+                          const unitPrice = watch(`items.${index}.unitPrice`) || 0;
+                          const quantity = watch(`items.${index}.quantity`) || 0;
+                          setValue(`items.${index}.total`, unitPrice * quantity);
+                        }}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <Label className="text-xs flex items-center gap-1">
+                        <Package className="h-3 w-3" />
+                        Qty
+                      </Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        {...register(`items.${index}.quantity`, { valueAsNumber: true })}
+                        onChange={() => {
+                          const unitPrice = watch(`items.${index}.unitPrice`) || 0;
+                          const quantity = watch(`items.${index}.quantity`) || 0;
+                          setValue(`items.${index}.total`, unitPrice * quantity);
+                        }}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="col-span-3 sm:col-span-4">
+                      <Label className="text-xs text-right block">Total</Label>
+                      <div className="text-sm font-bold text-[var(--primary)] h-10 flex items-center">
+                        Rs. {itemTotal.toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="col-span-12 sm:col-span-1 flex justify-end items-end">
+                      {!isEditMode && fields.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="mb-0.5"
+                          onClick={() => remove(index)}
+                        >
+                          <Trash2 className="h-4 w-4 text-[var(--destructive)]" />
+                        </Button>
+                      )}
                     </div>
                   </div>
-                  <div className="col-span-12 sm:col-span-1 flex justify-end items-end">
-                    {!isEditMode && fields.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="mb-0.5"
-                        onClick={() => remove(index)}
-                      >
-                        <Trash2 className="h-4 w-4 text-[var(--destructive)]" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
 
               {errors.items?.message && (
                 <p className="text-sm text-[var(--destructive)]">{errors.items.message}</p>

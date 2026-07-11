@@ -39,9 +39,9 @@ export const expensesRouter = createRouter({
     .input(
       z.object({
         name: z.string().min(1),
-        amount: z.number(), // Unit price
+        amount: z.number(),
         quantity: z.number().int().min(0).default(0),
-        total: z.number().default(0), // Total = amount × quantity
+        total: z.number().default(0),
         category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
         paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
         paidTo: z.string().optional(),
