@@ -1,10 +1,9 @@
-// Vercel serverless entrypoint. All backend source lives in ../server so that
-// Vercel does not try to treat each backend module as its own function.
-// The import of ../server/app must be static so Vercel's function bundler
-// traces and includes the whole server/ tree.
+// Source for the Vercel serverless function. `npm run build:api` bundles this
+// (and everything under server/) into api/index.js so Vercel runs one
+// self-contained file — no runtime module resolution of local paths.
 import { getRequestListener } from "@hono/node-server";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import app from "../server/app";
+import app from "./app.js";
 
 export const config = {
   runtime: "nodejs",

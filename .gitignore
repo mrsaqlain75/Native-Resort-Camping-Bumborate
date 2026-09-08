@@ -40,3 +40,7 @@ build/
 coverage/
 .nyc_output/
 node_modules/
+
+# Generated Vercel function bundle
+/api/index.js
+/api/index.js.map
