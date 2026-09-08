@@ -25,7 +25,7 @@ const envSchema = z.object({
   cloudinaryApiSecret: z.string().optional(),
 });
 
-export const env = envSchema.parse({
+const parsed = envSchema.safeParse({
   databaseUrl: process.env.DATABASE_URL,
   directUrl: process.env.DIRECT_URL || process.env.DATABASE_URL,
   jwtSecret: process.env.JWT_SECRET,
@@ -39,3 +39,12 @@ export const env = envSchema.parse({
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,
 });
+
+if (!parsed.success) {
+  const fields = parsed.error.issues
+    .map((i) => i.path.join(".") || "(root)")
+    .join(", ");
+  throw new Error(`Invalid or missing environment variables: ${fields}`);
+}
+
+export const env = parsed.data;
