@@ -7,6 +7,7 @@ import app from "./app.js";
 
 export const config = {
   runtime: "nodejs",
+  maxDuration: 30,
 };
 
 const listener = getRequestListener(app.fetch);
