@@ -13,8 +13,6 @@ import {
   Receipt,
   DollarSign,
   Utensils,
-  Tent,
-  MapPin,
   BarChart3,
   CalendarDays,
   CalendarRange,
@@ -29,7 +27,6 @@ import {
   ChevronRight,
   Menu,
   Download,
-  Upload, 
   Database
 } from "lucide-react";
 

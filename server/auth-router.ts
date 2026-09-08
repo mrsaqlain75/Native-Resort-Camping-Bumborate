@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { findUserByEmail, createOrGetOwner, createOrGetManager } from "./queries/users";
 import { verifyPassword, generateToken } from "./lib/auth";
-import { ErrorMessages } from "@contracts/constants";
+import { ErrorMessages } from "../contracts/constants";
 
 const loginSchema = z.object({
   email: z.string().email(),

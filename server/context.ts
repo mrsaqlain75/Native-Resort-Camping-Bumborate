@@ -1,6 +1,6 @@
-// api/context.ts
+// server/context.ts
 import type { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
-import type { User } from "@db/schema";
+import type { User } from "../db/schema";
 import { authenticateRequest } from "./lib/jwt-auth";
 
 export type TrpcContext = {
@@ -14,7 +14,7 @@ export async function createContext(
 ): Promise<TrpcContext> {
   const ctx: TrpcContext = { req: opts.req, resHeaders: opts.resHeaders };
   try {
-    ctx.user = await authenticateRequest(opts.req.headers);
+    ctx.user = (await authenticateRequest(opts.req.headers)) ?? undefined;
   } catch {
     // Authentication is optional here
   }

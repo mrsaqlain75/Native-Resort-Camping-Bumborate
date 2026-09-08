@@ -14,6 +14,6 @@
     "jsx": "react-jsx",
     "esModuleInterop": true
   },
-  "include": ["api", "db", "contracts", "src"],
+  "include": ["api", "server", "db", "contracts", "src"],
   "exclude": ["node_modules", "dist"]
 }

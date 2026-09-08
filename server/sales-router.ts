@@ -1,14 +1,14 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import * as schema from "@db/schema";
+import * as schema from "../db/schema";
 import { eq, desc, gte, lte, and, sql } from "drizzle-orm";
 
 export const salesRouter = createRouter({
-list: authedQuery.query(async () => {
-  const db = getDb();
-  return db.select().from(schema.sales).orderBy(desc(schema.sales.dateTime));
-}),
+  list: authedQuery.query(async () => {
+    const db = getDb();
+    return db.select().from(schema.sales).orderBy(desc(schema.sales.dateTime));
+  }),
 
   listByDateRange: authedQuery
     .input(z.object({ from: z.string(), to: z.string() }))
@@ -26,16 +26,18 @@ list: authedQuery.query(async () => {
         .orderBy(desc(schema.sales.dateTime));
     }),
 
-create: authedQuery
+  create: authedQuery
     .input(
       z.object({
         customerName: z.string().optional().default("Walk-in Customer"),
-        items: z.array(z.object({
-          name: z.string(),
-          quantity: z.number(),
-          unitPrice: z.number(),
-          total: z.number(),
-        })),
+        items: z.array(
+          z.object({
+            name: z.string(),
+            quantity: z.number(),
+            unitPrice: z.number(),
+            total: z.number(),
+          })
+        ),
         totalAmount: z.number(),
         discountPercent: z.number().optional().default(0),
         taxPercent: z.number().optional().default(0),
@@ -47,37 +49,43 @@ create: authedQuery
     )
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const result = await db.insert(schema.sales).values({
-        customerName: input.customerName || "Walk-in Customer",
-        items: input.items,
-        totalAmount: input.totalAmount.toString(),
-        discountPercent: input.discountPercent?.toString() || "0",
-        taxPercent: input.taxPercent?.toString() || "0",
-        paymentMethod: input.paymentMethod,
-        source: input.source,
-        dateTime: new Date(input.dateTime),
-        note: input.note || null,
-        createdBy: ctx.user.id,
-      });
-      return { id: Number(result[0].insertId), success: true };
+      const [row] = await db
+        .insert(schema.sales)
+        .values({
+          customerName: input.customerName || "Walk-in Customer",
+          items: input.items,
+          totalAmount: input.totalAmount.toString(),
+          discountPercent: input.discountPercent?.toString() || "0",
+          taxPercent: input.taxPercent?.toString() || "0",
+          paymentMethod: input.paymentMethod,
+          source: input.source,
+          dateTime: new Date(input.dateTime),
+          note: input.note || null,
+          createdBy: ctx.user.id,
+        })
+        .returning({ id: schema.sales.id });
+      return { id: row.id, success: true };
     }),
-
 
   getById: authedQuery
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       const db = getDb();
-      const rows = await db.select().from(schema.sales).where(eq(schema.sales.id, input.id)).limit(1);
+      const rows = await db
+        .select()
+        .from(schema.sales)
+        .where(eq(schema.sales.id, input.id))
+        .limit(1);
       return rows.at(0) ?? null;
     }),
 
-delete: authedQuery
-  .input(z.object({ id: z.number() }))
-  .mutation(async ({ input }) => {
-    const db = getDb();
-    await db.delete(schema.sales).where(eq(schema.sales.id, input.id));
-    return { success: true };
-  }),
+  delete: authedQuery
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await db.delete(schema.sales).where(eq(schema.sales.id, input.id));
+      return { success: true };
+    }),
 
   todaySummary: authedQuery.query(async () => {
     const db = getDb();
@@ -85,8 +93,8 @@ delete: authedQuery
     today.setHours(0, 0, 0, 0);
     const rows = await db
       .select({
-        total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
-        count: sql<number>`COUNT(*)`,
+        total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
+        count: sql<number>`COUNT(*)::int`,
       })
       .from(schema.sales)
       .where(gte(schema.sales.dateTime, today));
@@ -99,8 +107,8 @@ delete: authedQuery
       const db = getDb();
       const rows = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
-          count: sql<number>`COUNT(*)`,
+          total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
+          count: sql<number>`COUNT(*)::int`,
         })
         .from(schema.sales)
         .where(
@@ -118,9 +126,9 @@ delete: authedQuery
       const db = getDb();
       const rows = await db
         .select({
-          date: sql<string>`DATE(${schema.sales.dateTime})`,
-          total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
-          count: sql<number>`COUNT(*)`,
+          date: sql<string>`to_char(${schema.sales.dateTime}, 'YYYY-MM-DD')`,
+          total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
+          count: sql<number>`COUNT(*)::int`,
         })
         .from(schema.sales)
         .where(
@@ -129,23 +137,24 @@ delete: authedQuery
             lte(schema.sales.dateTime, new Date(input.to))
           )
         )
-        .groupBy(sql`DATE(${schema.sales.dateTime})`)
-        .orderBy(sql`DATE(${schema.sales.dateTime})`);
+        .groupBy(sql`to_char(${schema.sales.dateTime}, 'YYYY-MM-DD')`)
+        .orderBy(sql`to_char(${schema.sales.dateTime}, 'YYYY-MM-DD')`);
       return rows;
     }),
-
 
   update: authedQuery
     .input(
       z.object({
         id: z.number(),
         customerName: z.string().optional(),
-        items: z.array(z.object({
-          name: z.string(),
-          quantity: z.number(),
-          unitPrice: z.number(),
-          total: z.number(),
-        })),
+        items: z.array(
+          z.object({
+            name: z.string(),
+            quantity: z.number(),
+            unitPrice: z.number(),
+            total: z.number(),
+          })
+        ),
         totalAmount: z.number(),
         discountPercent: z.number().optional(),
         taxPercent: z.number().optional(),
@@ -157,7 +166,8 @@ delete: authedQuery
     )
     .mutation(async ({ input }) => {
       const db = getDb();
-      await db.update(schema.sales)
+      await db
+        .update(schema.sales)
         .set({
           customerName: input.customerName || "Walk-in Customer",
           items: input.items,
@@ -181,9 +191,9 @@ delete: authedQuery
       const to = new Date(input.year + 1, 0, 1);
       const rows = await db
         .select({
-          month: sql<number>`MONTH(${schema.sales.dateTime})`,
-          total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
-          count: sql<number>`COUNT(*)`,
+          month: sql<number>`EXTRACT(MONTH FROM ${schema.sales.dateTime})::int`,
+          total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
+          count: sql<number>`COUNT(*)::int`,
         })
         .from(schema.sales)
         .where(
@@ -192,8 +202,8 @@ delete: authedQuery
             lte(schema.sales.dateTime, to)
           )
         )
-        .groupBy(sql`MONTH(${schema.sales.dateTime})`)
-        .orderBy(sql`MONTH(${schema.sales.dateTime})`);
+        .groupBy(sql`EXTRACT(MONTH FROM ${schema.sales.dateTime})`)
+        .orderBy(sql`EXTRACT(MONTH FROM ${schema.sales.dateTime})`);
       return rows;
     }),
 
@@ -201,13 +211,13 @@ delete: authedQuery
     const db = getDb();
     const rows = await db
       .select({
-        year: sql<number>`YEAR(${schema.sales.dateTime})`,
-        total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
-        count: sql<number>`COUNT(*)`,
+        year: sql<number>`EXTRACT(YEAR FROM ${schema.sales.dateTime})::int`,
+        total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
+        count: sql<number>`COUNT(*)::int`,
       })
       .from(schema.sales)
-      .groupBy(sql`YEAR(${schema.sales.dateTime})`)
-      .orderBy(sql`YEAR(${schema.sales.dateTime})`);
+      .groupBy(sql`EXTRACT(YEAR FROM ${schema.sales.dateTime})`)
+      .orderBy(sql`EXTRACT(YEAR FROM ${schema.sales.dateTime})`);
     return rows;
   }),
 
@@ -231,7 +241,10 @@ delete: authedQuery
           )
         );
 
-      const itemMap = new Map<string, { name: string; quantity: number; revenue: number }>();
+      const itemMap = new Map<
+        string,
+        { name: string; quantity: number; revenue: number }
+      >();
       for (const sale of rows) {
         for (const item of sale.items) {
           const existing = itemMap.get(item.name);

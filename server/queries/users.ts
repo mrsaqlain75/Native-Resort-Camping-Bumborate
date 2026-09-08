@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
-import * as schema from "@db/schema";
-import type { InsertUser, User } from "@db/schema";
+import * as schema from "../../db/schema";
+import type { InsertUser, User } from "../../db/schema";
 import { getDb } from "./connection";
 import { env } from "../lib/env";
 import { hashPassword } from "../lib/auth";
@@ -24,12 +24,12 @@ export async function findUserById(id: number): Promise<User | undefined> {
 }
 
 export async function createUser(data: InsertUser): Promise<User> {
-  const result = await getDb()
+  const [row] = await getDb()
     .insert(schema.users)
-    .values(data);
-  
-  const userId = result[0].insertId;
-  const user = await findUserById(userId);
+    .values(data)
+    .returning({ id: schema.users.id });
+
+  const user = await findUserById(row.id);
   if (!user) throw new Error("Failed to create user");
   return user;
 }

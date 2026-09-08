@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import * as schema from "@db/schema";
-import { gte, lte, and, sql } from "drizzle-orm";
+import * as schema from "../db/schema";
+import { gte, lte, and, desc, sql } from "drizzle-orm";
 
 export const reportsRouter = createRouter({
   profitLoss: authedQuery
@@ -14,8 +14,8 @@ export const reportsRouter = createRouter({
 
       const [salesRows] = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
-          count: sql<number>`COUNT(*)`,
+          total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
+          count: sql<number>`COUNT(*)::int`,
         })
         .from(schema.sales)
         .where(
@@ -27,8 +27,8 @@ export const reportsRouter = createRouter({
 
       const [expenseRows] = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
-          count: sql<number>`COUNT(*)`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+          count: sql<number>`COUNT(*)::int`,
         })
         .from(schema.expenses)
         .where(
@@ -40,8 +40,8 @@ export const reportsRouter = createRouter({
 
       const [campingRows] = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)`,
-          count: sql<number>`COUNT(*)`,
+          total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)::float`,
+          count: sql<number>`COUNT(*)::int`,
         })
         .from(schema.campingSales)
         .where(
@@ -80,8 +80,8 @@ export const reportsRouter = createRouter({
 
       const salesRows = await db
         .select({
-          date: sql<string>`DATE(${schema.sales.dateTime})`,
-          total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
+          date: sql<string>`to_char(${schema.sales.dateTime}, 'YYYY-MM-DD')`,
+          total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
         })
         .from(schema.sales)
         .where(
@@ -90,13 +90,13 @@ export const reportsRouter = createRouter({
             lte(schema.sales.dateTime, toDate)
           )
         )
-        .groupBy(sql`DATE(${schema.sales.dateTime})`)
-        .orderBy(sql`DATE(${schema.sales.dateTime})`);
+        .groupBy(sql`to_char(${schema.sales.dateTime}, 'YYYY-MM-DD')`)
+        .orderBy(sql`to_char(${schema.sales.dateTime}, 'YYYY-MM-DD')`);
 
       const expenseRows = await db
         .select({
-          date: sql<string>`DATE(${schema.expenses.dateTime})`,
-          total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+          date: sql<string>`to_char(${schema.expenses.dateTime}, 'YYYY-MM-DD')`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
         })
         .from(schema.expenses)
         .where(
@@ -105,13 +105,13 @@ export const reportsRouter = createRouter({
             lte(schema.expenses.dateTime, toDate)
           )
         )
-        .groupBy(sql`DATE(${schema.expenses.dateTime})`)
-        .orderBy(sql`DATE(${schema.expenses.dateTime})`);
+        .groupBy(sql`to_char(${schema.expenses.dateTime}, 'YYYY-MM-DD')`)
+        .orderBy(sql`to_char(${schema.expenses.dateTime}, 'YYYY-MM-DD')`);
 
       const campingRows = await db
         .select({
-          date: sql<string>`DATE(${schema.campingSales.dateTime})`,
-          total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)`,
+          date: sql<string>`to_char(${schema.campingSales.dateTime}, 'YYYY-MM-DD')`,
+          total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)::float`,
         })
         .from(schema.campingSales)
         .where(
@@ -120,25 +120,52 @@ export const reportsRouter = createRouter({
             lte(schema.campingSales.dateTime, toDate)
           )
         )
-        .groupBy(sql`DATE(${schema.campingSales.dateTime})`)
-        .orderBy(sql`DATE(${schema.campingSales.dateTime})`);
+        .groupBy(sql`to_char(${schema.campingSales.dateTime}, 'YYYY-MM-DD')`)
+        .orderBy(sql`to_char(${schema.campingSales.dateTime}, 'YYYY-MM-DD')`);
 
-      const dateMap = new Map<string, { date: string; sales: number; expenses: number; camping: number; profit: number }>();
+      const dateMap = new Map<
+        string,
+        {
+          date: string;
+          sales: number;
+          expenses: number;
+          camping: number;
+          profit: number;
+        }
+      >();
 
       for (const row of salesRows) {
-        const d = dateMap.get(row.date) || { date: row.date, sales: 0, expenses: 0, camping: 0, profit: 0 };
+        const d = dateMap.get(row.date) || {
+          date: row.date,
+          sales: 0,
+          expenses: 0,
+          camping: 0,
+          profit: 0,
+        };
         d.sales = Number(row.total);
         dateMap.set(row.date, d);
       }
 
       for (const row of expenseRows) {
-        const d = dateMap.get(row.date) || { date: row.date, sales: 0, expenses: 0, camping: 0, profit: 0 };
+        const d = dateMap.get(row.date) || {
+          date: row.date,
+          sales: 0,
+          expenses: 0,
+          camping: 0,
+          profit: 0,
+        };
         d.expenses = Number(row.total);
         dateMap.set(row.date, d);
       }
 
       for (const row of campingRows) {
-        const d = dateMap.get(row.date) || { date: row.date, sales: 0, expenses: 0, camping: 0, profit: 0 };
+        const d = dateMap.get(row.date) || {
+          date: row.date,
+          sales: 0,
+          expenses: 0,
+          camping: 0,
+          profit: 0,
+        };
         d.camping = Number(row.total);
         dateMap.set(row.date, d);
       }
@@ -147,7 +174,9 @@ export const reportsRouter = createRouter({
         d.profit = d.sales + d.camping - d.expenses;
       }
 
-      return Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+      return Array.from(dateMap.values()).sort((a, b) =>
+        a.date.localeCompare(b.date)
+      );
     }),
 
   monthlyProfitLoss: authedQuery
@@ -159,8 +188,8 @@ export const reportsRouter = createRouter({
 
       const salesRows = await db
         .select({
-          month: sql<number>`MONTH(${schema.sales.dateTime})`,
-          total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
+          month: sql<number>`EXTRACT(MONTH FROM ${schema.sales.dateTime})::int`,
+          total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
         })
         .from(schema.sales)
         .where(
@@ -169,13 +198,13 @@ export const reportsRouter = createRouter({
             lte(schema.sales.dateTime, toDate)
           )
         )
-        .groupBy(sql`MONTH(${schema.sales.dateTime})`)
-        .orderBy(sql`MONTH(${schema.sales.dateTime})`);
+        .groupBy(sql`EXTRACT(MONTH FROM ${schema.sales.dateTime})`)
+        .orderBy(sql`EXTRACT(MONTH FROM ${schema.sales.dateTime})`);
 
       const expenseRows = await db
         .select({
-          month: sql<number>`MONTH(${schema.expenses.dateTime})`,
-          total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+          month: sql<number>`EXTRACT(MONTH FROM ${schema.expenses.dateTime})::int`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
         })
         .from(schema.expenses)
         .where(
@@ -184,13 +213,13 @@ export const reportsRouter = createRouter({
             lte(schema.expenses.dateTime, toDate)
           )
         )
-        .groupBy(sql`MONTH(${schema.expenses.dateTime})`)
-        .orderBy(sql`MONTH(${schema.expenses.dateTime})`);
+        .groupBy(sql`EXTRACT(MONTH FROM ${schema.expenses.dateTime})`)
+        .orderBy(sql`EXTRACT(MONTH FROM ${schema.expenses.dateTime})`);
 
       const campingRows = await db
         .select({
-          month: sql<number>`MONTH(${schema.campingSales.dateTime})`,
-          total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)`,
+          month: sql<number>`EXTRACT(MONTH FROM ${schema.campingSales.dateTime})::int`,
+          total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)::float`,
         })
         .from(schema.campingSales)
         .where(
@@ -199,28 +228,43 @@ export const reportsRouter = createRouter({
             lte(schema.campingSales.dateTime, toDate)
           )
         )
-        .groupBy(sql`MONTH(${schema.campingSales.dateTime})`)
-        .orderBy(sql`MONTH(${schema.campingSales.dateTime})`);
+        .groupBy(sql`EXTRACT(MONTH FROM ${schema.campingSales.dateTime})`)
+        .orderBy(sql`EXTRACT(MONTH FROM ${schema.campingSales.dateTime})`);
 
-      const monthMap = new Map<number, { month: number; sales: number; expenses: number; camping: number; profit: number }>();
+      const monthMap = new Map<
+        number,
+        {
+          month: number;
+          sales: number;
+          expenses: number;
+          camping: number;
+          profit: number;
+        }
+      >();
 
       for (let i = 1; i <= 12; i++) {
-        monthMap.set(i, { month: i, sales: 0, expenses: 0, camping: 0, profit: 0 });
+        monthMap.set(i, {
+          month: i,
+          sales: 0,
+          expenses: 0,
+          camping: 0,
+          profit: 0,
+        });
       }
 
       for (const row of salesRows) {
-        const m = monthMap.get(row.month)!;
-        m.sales = Number(row.total);
+        const m = monthMap.get(Number(row.month));
+        if (m) m.sales = Number(row.total);
       }
 
       for (const row of expenseRows) {
-        const m = monthMap.get(row.month)!;
-        m.expenses = Number(row.total);
+        const m = monthMap.get(Number(row.month));
+        if (m) m.expenses = Number(row.total);
       }
 
       for (const row of campingRows) {
-        const m = monthMap.get(row.month)!;
-        m.camping = Number(row.total);
+        const m = monthMap.get(Number(row.month));
+        if (m) m.camping = Number(row.total);
       }
 
       for (const m of monthMap.values()) {
@@ -235,49 +279,76 @@ export const reportsRouter = createRouter({
 
     const salesRows = await db
       .select({
-        year: sql<number>`YEAR(${schema.sales.dateTime})`,
-        total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
+        year: sql<number>`EXTRACT(YEAR FROM ${schema.sales.dateTime})::int`,
+        total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
       })
       .from(schema.sales)
-      .groupBy(sql`YEAR(${schema.sales.dateTime})`)
-      .orderBy(sql`YEAR(${schema.sales.dateTime})`);
+      .groupBy(sql`EXTRACT(YEAR FROM ${schema.sales.dateTime})`)
+      .orderBy(sql`EXTRACT(YEAR FROM ${schema.sales.dateTime})`);
 
     const expenseRows = await db
       .select({
-        year: sql<number>`YEAR(${schema.expenses.dateTime})`,
-        total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+        year: sql<number>`EXTRACT(YEAR FROM ${schema.expenses.dateTime})::int`,
+        total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
       })
       .from(schema.expenses)
-      .groupBy(sql`YEAR(${schema.expenses.dateTime})`)
-      .orderBy(sql`YEAR(${schema.expenses.dateTime})`);
+      .groupBy(sql`EXTRACT(YEAR FROM ${schema.expenses.dateTime})`)
+      .orderBy(sql`EXTRACT(YEAR FROM ${schema.expenses.dateTime})`);
 
     const campingRows = await db
       .select({
-        year: sql<number>`YEAR(${schema.campingSales.dateTime})`,
-        total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)`,
+        year: sql<number>`EXTRACT(YEAR FROM ${schema.campingSales.dateTime})::int`,
+        total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)::float`,
       })
       .from(schema.campingSales)
-      .groupBy(sql`YEAR(${schema.campingSales.dateTime})`)
-      .orderBy(sql`YEAR(${schema.campingSales.dateTime})`);
+      .groupBy(sql`EXTRACT(YEAR FROM ${schema.campingSales.dateTime})`)
+      .orderBy(sql`EXTRACT(YEAR FROM ${schema.campingSales.dateTime})`);
 
-    const yearMap = new Map<number, { year: number; sales: number; expenses: number; camping: number; profit: number }>();
+    const yearMap = new Map<
+      number,
+      {
+        year: number;
+        sales: number;
+        expenses: number;
+        camping: number;
+        profit: number;
+      }
+    >();
 
     for (const row of salesRows) {
-      const y = yearMap.get(row.year) || { year: row.year, sales: 0, expenses: 0, camping: 0, profit: 0 };
+      const y = yearMap.get(Number(row.year)) || {
+        year: Number(row.year),
+        sales: 0,
+        expenses: 0,
+        camping: 0,
+        profit: 0,
+      };
       y.sales = Number(row.total);
-      yearMap.set(row.year, y);
+      yearMap.set(Number(row.year), y);
     }
 
     for (const row of expenseRows) {
-      const y = yearMap.get(row.year) || { year: row.year, sales: 0, expenses: 0, camping: 0, profit: 0 };
+      const y = yearMap.get(Number(row.year)) || {
+        year: Number(row.year),
+        sales: 0,
+        expenses: 0,
+        camping: 0,
+        profit: 0,
+      };
       y.expenses = Number(row.total);
-      yearMap.set(row.year, y);
+      yearMap.set(Number(row.year), y);
     }
 
     for (const row of campingRows) {
-      const y = yearMap.get(row.year) || { year: row.year, sales: 0, expenses: 0, camping: 0, profit: 0 };
+      const y = yearMap.get(Number(row.year)) || {
+        year: Number(row.year),
+        sales: 0,
+        expenses: 0,
+        camping: 0,
+        profit: 0,
+      };
       y.camping = Number(row.total);
-      yearMap.set(row.year, y);
+      yearMap.set(Number(row.year), y);
     }
 
     for (const y of yearMap.values()) {
@@ -297,7 +368,9 @@ export const reportsRouter = createRouter({
         const toDate = new Date(year + 1, 0, 1);
 
         const [salesResult] = await db
-          .select({ total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)` })
+          .select({
+            total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
+          })
           .from(schema.sales)
           .where(
             and(
@@ -307,7 +380,9 @@ export const reportsRouter = createRouter({
           );
 
         const [expenseResult] = await db
-          .select({ total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)` })
+          .select({
+            total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+          })
           .from(schema.expenses)
           .where(
             and(
@@ -317,7 +392,9 @@ export const reportsRouter = createRouter({
           );
 
         const [campingResult] = await db
-          .select({ total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)` })
+          .select({
+            total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)::float`,
+          })
           .from(schema.campingSales)
           .where(
             and(
@@ -343,10 +420,26 @@ export const reportsRouter = createRouter({
         year1: year1Data,
         year2: year2Data,
         comparison: {
-          salesChange: year1Data.sales > 0 ? ((year2Data.sales - year1Data.sales) / year1Data.sales) * 100 : 0,
-          expensesChange: year1Data.expenses > 0 ? ((year2Data.expenses - year1Data.expenses) / year1Data.expenses) * 100 : 0,
-          incomeChange: year1Data.income > 0 ? ((year2Data.income - year1Data.income) / year1Data.income) * 100 : 0,
-          profitChange: year1Data.profit !== 0 ? ((year2Data.profit - year1Data.profit) / Math.abs(year1Data.profit)) * 100 : 0,
+          salesChange:
+            year1Data.sales > 0
+              ? ((year2Data.sales - year1Data.sales) / year1Data.sales) * 100
+              : 0,
+          expensesChange:
+            year1Data.expenses > 0
+              ? ((year2Data.expenses - year1Data.expenses) /
+                  year1Data.expenses) *
+                100
+              : 0,
+          incomeChange:
+            year1Data.income > 0
+              ? ((year2Data.income - year1Data.income) / year1Data.income) * 100
+              : 0,
+          profitChange:
+            year1Data.profit !== 0
+              ? ((year2Data.profit - year1Data.profit) /
+                  Math.abs(year1Data.profit)) *
+                100
+              : 0,
         },
       };
     }),
@@ -362,47 +455,65 @@ export const reportsRouter = createRouter({
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
     const [todaySales] = await db
-      .select({ total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)` })
+      .select({
+        total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
+      })
       .from(schema.sales)
       .where(gte(schema.sales.dateTime, today));
 
     const [weekSales] = await db
-      .select({ total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)` })
+      .select({
+        total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
+      })
       .from(schema.sales)
       .where(gte(schema.sales.dateTime, startOfWeek));
 
     const [monthSales] = await db
-      .select({ total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)` })
+      .select({
+        total: sql<number>`COALESCE(SUM(${schema.sales.totalAmount}), 0)::float`,
+      })
       .from(schema.sales)
       .where(gte(schema.sales.dateTime, startOfMonth));
 
     const [todayExpenses] = await db
-      .select({ total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)` })
+      .select({
+        total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+      })
       .from(schema.expenses)
       .where(gte(schema.expenses.dateTime, today));
 
     const [weekExpenses] = await db
-      .select({ total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)` })
+      .select({
+        total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+      })
       .from(schema.expenses)
       .where(gte(schema.expenses.dateTime, startOfWeek));
 
     const [monthExpenses] = await db
-      .select({ total: sql<number>`COALESCE(SUM(${schema.expenses.amount}), 0)` })
+      .select({
+        total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+      })
       .from(schema.expenses)
       .where(gte(schema.expenses.dateTime, startOfMonth));
 
     const [todayCamping] = await db
-      .select({ total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)` })
+      .select({
+        total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)::float`,
+      })
       .from(schema.campingSales)
       .where(gte(schema.campingSales.dateTime, today));
 
     const [weekCamping] = await db
-      .select({ total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)` })
+      .select({
+        total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)::float`,
+      })
       .from(schema.campingSales)
       .where(gte(schema.campingSales.dateTime, startOfWeek));
 
     const [monthCamping] = await db
-      .select({ total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)` })
+      .select({
+        total: sql<number>`COALESCE(SUM(${schema.campingSales.totalAmount}), 0)::float`,
+      })
       .from(schema.campingSales)
       .where(gte(schema.campingSales.dateTime, startOfMonth));
 
@@ -411,19 +522,28 @@ export const reportsRouter = createRouter({
         sales: Number(todaySales?.total ?? 0),
         expenses: Number(todayExpenses?.total ?? 0),
         camping: Number(todayCamping?.total ?? 0),
-        profit: Number(todaySales?.total ?? 0) + Number(todayCamping?.total ?? 0) - Number(todayExpenses?.total ?? 0),
+        profit:
+          Number(todaySales?.total ?? 0) +
+          Number(todayCamping?.total ?? 0) -
+          Number(todayExpenses?.total ?? 0),
       },
       week: {
         sales: Number(weekSales?.total ?? 0),
         expenses: Number(weekExpenses?.total ?? 0),
         camping: Number(weekCamping?.total ?? 0),
-        profit: Number(weekSales?.total ?? 0) + Number(weekCamping?.total ?? 0) - Number(weekExpenses?.total ?? 0),
+        profit:
+          Number(weekSales?.total ?? 0) +
+          Number(weekCamping?.total ?? 0) -
+          Number(weekExpenses?.total ?? 0),
       },
       month: {
         sales: Number(monthSales?.total ?? 0),
         expenses: Number(monthExpenses?.total ?? 0),
         camping: Number(monthCamping?.total ?? 0),
-        profit: Number(monthSales?.total ?? 0) + Number(monthCamping?.total ?? 0) - Number(monthExpenses?.total ?? 0),
+        profit:
+          Number(monthSales?.total ?? 0) +
+          Number(monthCamping?.total ?? 0) -
+          Number(monthExpenses?.total ?? 0),
       },
     };
   }),
@@ -434,19 +554,19 @@ export const reportsRouter = createRouter({
     const recentSales = await db
       .select()
       .from(schema.sales)
-      .orderBy(sql`${schema.sales.createdAt} DESC`)
+      .orderBy(desc(schema.sales.createdAt))
       .limit(5);
 
     const recentExpenses = await db
       .select()
       .from(schema.expenses)
-      .orderBy(sql`${schema.expenses.createdAt} DESC`)
+      .orderBy(desc(schema.expenses.createdAt))
       .limit(5);
 
     const recentCamping = await db
       .select()
       .from(schema.campingSales)
-      .orderBy(sql`${schema.campingSales.createdAt} DESC`)
+      .orderBy(desc(schema.campingSales.createdAt))
       .limit(5);
 
     return {

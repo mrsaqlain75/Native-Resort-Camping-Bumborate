@@ -1,14 +1,6 @@
-# Only ignore backend files
-api/**/*.ts
-db/**/*.ts
-contracts/**/*.ts
-
-# Do NOT ignore frontend source files
-!src/**/*.ts
-!src/**/*.tsx
-
-# Ignore test files
+# Frontend + API (server/, db/, contracts/) all deploy together now.
+# node_modules, .git and dist are ignored by Vercel automatically.
+.env
+.env.*
 *.test.ts
 *.spec.ts
-test-*.js
-create-owner.js

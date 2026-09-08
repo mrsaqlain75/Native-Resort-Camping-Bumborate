@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DollarSign, Plus, Trash2, User, Package } from "lucide-react";
 import { toast } from "sonner";
+import { uploadSignedToCloudinary } from "@/lib/cloudinary";
 
 const expenseItemSchema = z.object({
   name: z.string().min(1, "Expense name is required"),
@@ -55,6 +56,8 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
   const isEditMode = !!expenseToEdit;
   const utils = trpc.useUtils();
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const signUpload = trpc.cloudinary.signUpload.useMutation();
 
   const {
     control,
@@ -63,7 +66,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     setValue,
     watch,
     reset,
-    trigger,
     formState: { errors },
   } = useForm<ExpenseForm>({
     resolver: zodResolver(expenseFormSchema),
@@ -106,17 +108,20 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
   // Watch items array for changes to recalculate totals
   const watchedItems = watch("items");
 
-  // Calculate total for each item and grand total
-  const itemsWithTotals = watchedItems.map((item, index) => {
-    const total = (item.unitPrice || 0) * (item.quantity || 0);
-    // Update the form value if it doesn't match
-    if (item.total !== total) {
-      setValue(`items.${index}.total`, total);
-    }
-    return { ...item, total };
-  });
+  // Keep each line's `total` in sync with unitPrice * quantity
+  useEffect(() => {
+    watchedItems.forEach((item, index) => {
+      const total = (item.unitPrice || 0) * (item.quantity || 0);
+      if (item.total !== total) {
+        setValue(`items.${index}.total`, total);
+      }
+    });
+  }, [watchedItems, setValue]);
 
-  const grandTotal = itemsWithTotals.reduce((sum, item) => sum + (item.total || 0), 0);
+  const grandTotal = watchedItems.reduce(
+    (sum, item) => sum + (item.unitPrice || 0) * (item.quantity || 0),
+    0
+  );
 
   const createMultipleExpenses = trpc.expenses.createMultiple.useMutation({
     onSuccess: () => {
@@ -141,8 +146,29 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     onError: (err) => toast.error(err.message),
   });
 
-  const onSubmit = (data: ExpenseForm) => {
-    const receiptUrlValue = receiptFile ? `uploaded:${receiptFile.name}` : undefined;
+  const onSubmit = async (data: ExpenseForm) => {
+    // Preserve any existing receipt when editing and no new file is chosen
+    let receiptUrlValue: string | undefined =
+      isEditMode && expenseToEdit
+        ? expenseToEdit.receiptUrl || undefined
+        : undefined;
+
+    if (receiptFile) {
+      try {
+        setIsUploading(true);
+        const sig = await signUpload.mutateAsync({
+          folder: "native-resort/expense-receipts",
+        });
+        receiptUrlValue = await uploadSignedToCloudinary(receiptFile, sig);
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Receipt upload failed"
+        );
+        return;
+      } finally {
+        setIsUploading(false);
+      }
+    }
 
     if (isEditMode && expenseToEdit) {
       const item = data.items[0];
@@ -151,7 +177,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         name: item.name,
         amount: item.unitPrice,
         quantity: item.quantity || 0,
-        total: item.total || (item.unitPrice * (item.quantity || 0)),
+        total: item.total || item.unitPrice * (item.quantity || 0),
         category: data.category,
         paymentMethod: data.paymentMethod,
         paidTo: data.vendorName || null,
@@ -164,7 +190,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         name: item.name,
         amount: item.unitPrice,
         quantity: item.quantity || 0,
-        total: item.total || (item.unitPrice * (item.quantity || 0)),
+        total: item.total || item.unitPrice * (item.quantity || 0),
         category: data.category,
         paymentMethod: data.paymentMethod,
         paidTo: data.vendorName || null,
@@ -387,9 +413,15 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               <Button
                 type="submit"
                 className="flex-1"
-                disabled={createMultipleExpenses.isPending || updateExpense.isPending}
+                disabled={
+                  isUploading ||
+                  createMultipleExpenses.isPending ||
+                  updateExpense.isPending
+                }
               >
-                {(createMultipleExpenses.isPending || updateExpense.isPending)
+                {isUploading
+                  ? "Uploading receipt..."
+                  : createMultipleExpenses.isPending || updateExpense.isPending
                   ? "Saving..."
                   : isEditMode
                   ? "Update Expense"

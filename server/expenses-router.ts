@@ -1,14 +1,16 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import * as schema from "@db/schema";
+import * as schema from "../db/schema";
 import { eq, desc, gte, lte, and, sql } from "drizzle-orm";
 
 export const expensesRouter = createRouter({
-
   list: authedQuery.query(async () => {
     const db = getDb();
-    return db.select().from(schema.expenses).orderBy(desc(schema.expenses.dateTime));
+    return db
+      .select()
+      .from(schema.expenses)
+      .orderBy(desc(schema.expenses.dateTime));
   }),
 
   delete: authedQuery
@@ -42,7 +44,15 @@ export const expensesRouter = createRouter({
         amount: z.number(),
         quantity: z.number().int().min(0).default(0),
         total: z.number().default(0),
-        category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
+        category: z.enum([
+          "food",
+          "supplies",
+          "utilities",
+          "staff",
+          "maintenance",
+          "rent",
+          "other",
+        ]),
         paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
         paidTo: z.string().optional(),
         receiptUrl: z.string().optional(),
@@ -77,7 +87,15 @@ export const expensesRouter = createRouter({
             amount: z.number(),
             quantity: z.number().int().min(0).default(0),
             total: z.number().default(0),
-            category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
+            category: z.enum([
+              "food",
+              "supplies",
+              "utilities",
+              "staff",
+              "maintenance",
+              "rent",
+              "other",
+            ]),
             paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
             paidTo: z.string().optional().nullable(),
             receiptUrl: z.string().optional(),
@@ -89,46 +107,63 @@ export const expensesRouter = createRouter({
     )
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const results = [];
-      
-      for (const expense of input.expenses) {
-        const result = await db.insert(schema.expenses).values({
-          name: expense.name,
-          amount: expense.amount.toString(),
-          quantity: expense.quantity || 0,
-          total: expense.total.toString(),
-          category: expense.category,
-          paymentMethod: expense.paymentMethod,
-          paidTo: expense.paidTo || null,
-          receiptUrl: expense.receiptUrl || null,
-          dateTime: new Date(expense.dateTime),
-          note: expense.note || null,
-          createdBy: ctx.user.id,
-        });
-        results.push({ id: Number(result[0].insertId) });
-      }
-      
-      return { success: true, count: results.length };
+
+      const ids = await db.transaction(async (tx) => {
+        const inserted: number[] = [];
+        for (const expense of input.expenses) {
+          const [row] = await tx
+            .insert(schema.expenses)
+            .values({
+              name: expense.name,
+              amount: expense.amount.toString(),
+              quantity: expense.quantity || 0,
+              total: expense.total.toString(),
+              category: expense.category,
+              paymentMethod: expense.paymentMethod,
+              paidTo: expense.paidTo || null,
+              receiptUrl: expense.receiptUrl || null,
+              dateTime: new Date(expense.dateTime),
+              note: expense.note || null,
+              createdBy: ctx.user.id,
+            })
+            .returning({ id: schema.expenses.id });
+          inserted.push(row.id);
+        }
+        return inserted;
+      });
+
+      return { success: true, count: ids.length };
     }),
 
   update: authedQuery
-    .input(z.object({
-      id: z.number(),
-      name: z.string(),
-      amount: z.number(),
-      quantity: z.number().int().min(0).optional(),
-      total: z.number().optional(),
-      category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
-      paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
-      paidTo: z.string().optional(),
-      receiptUrl: z.string().optional(),
-      dateTime: z.string(),
-      note: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        id: z.number(),
+        name: z.string(),
+        amount: z.number(),
+        quantity: z.number().int().min(0).optional(),
+        total: z.number().optional(),
+        category: z.enum([
+          "food",
+          "supplies",
+          "utilities",
+          "staff",
+          "maintenance",
+          "rent",
+          "other",
+        ]),
+        paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
+        paidTo: z.string().nullable().optional(),
+        receiptUrl: z.string().nullable().optional(),
+        dateTime: z.string(),
+        note: z.string().nullable().optional(),
+      })
+    )
     .mutation(async ({ input }) => {
       const db = getDb();
-      const total = input.total || (input.amount * (input.quantity || 0));
-      await db.update(schema.expenses)
+      const total = input.total || input.amount * (input.quantity || 0);
+      await db
+        .update(schema.expenses)
         .set({
           name: input.name,
           amount: input.amount.toString(),
@@ -151,8 +186,8 @@ export const expensesRouter = createRouter({
     today.setHours(0, 0, 0, 0);
     const rows = await db
       .select({
-        total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)`,
-        count: sql<number>`COUNT(*)`,
+        total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+        count: sql<number>`COUNT(*)::int`,
       })
       .from(schema.expenses)
       .where(gte(schema.expenses.dateTime, today));
@@ -165,8 +200,8 @@ export const expensesRouter = createRouter({
       const db = getDb();
       const rows = await db
         .select({
-          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)`,
-          count: sql<number>`COUNT(*)`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+          count: sql<number>`COUNT(*)::int`,
         })
         .from(schema.expenses)
         .where(
@@ -184,9 +219,9 @@ export const expensesRouter = createRouter({
       const db = getDb();
       const rows = await db
         .select({
-          date: sql<string>`DATE(${schema.expenses.dateTime})`,
-          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)`,
-          count: sql<number>`COUNT(*)`,
+          date: sql<string>`to_char(${schema.expenses.dateTime}, 'YYYY-MM-DD')`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+          count: sql<number>`COUNT(*)::int`,
         })
         .from(schema.expenses)
         .where(
@@ -195,8 +230,8 @@ export const expensesRouter = createRouter({
             lte(schema.expenses.dateTime, new Date(input.to))
           )
         )
-        .groupBy(sql`DATE(${schema.expenses.dateTime})`)
-        .orderBy(sql`DATE(${schema.expenses.dateTime})`);
+        .groupBy(sql`to_char(${schema.expenses.dateTime}, 'YYYY-MM-DD')`)
+        .orderBy(sql`to_char(${schema.expenses.dateTime}, 'YYYY-MM-DD')`);
       return rows;
     }),
 
@@ -208,9 +243,9 @@ export const expensesRouter = createRouter({
       const to = new Date(input.year + 1, 0, 1);
       const rows = await db
         .select({
-          month: sql<number>`MONTH(${schema.expenses.dateTime})`,
-          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)`,
-          count: sql<number>`COUNT(*)`,
+          month: sql<number>`EXTRACT(MONTH FROM ${schema.expenses.dateTime})::int`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+          count: sql<number>`COUNT(*)::int`,
         })
         .from(schema.expenses)
         .where(
@@ -219,8 +254,8 @@ export const expensesRouter = createRouter({
             lte(schema.expenses.dateTime, to)
           )
         )
-        .groupBy(sql`MONTH(${schema.expenses.dateTime})`)
-        .orderBy(sql`MONTH(${schema.expenses.dateTime})`);
+        .groupBy(sql`EXTRACT(MONTH FROM ${schema.expenses.dateTime})`)
+        .orderBy(sql`EXTRACT(MONTH FROM ${schema.expenses.dateTime})`);
       return rows;
     }),
 
@@ -228,13 +263,13 @@ export const expensesRouter = createRouter({
     const db = getDb();
     const rows = await db
       .select({
-        year: sql<number>`YEAR(${schema.expenses.dateTime})`,
-        total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)`,
-        count: sql<number>`COUNT(*)`,
+        year: sql<number>`EXTRACT(YEAR FROM ${schema.expenses.dateTime})::int`,
+        total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+        count: sql<number>`COUNT(*)::int`,
       })
       .from(schema.expenses)
-      .groupBy(sql`YEAR(${schema.expenses.dateTime})`)
-      .orderBy(sql`YEAR(${schema.expenses.dateTime})`);
+      .groupBy(sql`EXTRACT(YEAR FROM ${schema.expenses.dateTime})`)
+      .orderBy(sql`EXTRACT(YEAR FROM ${schema.expenses.dateTime})`);
     return rows;
   }),
 
@@ -245,8 +280,8 @@ export const expensesRouter = createRouter({
       const rows = await db
         .select({
           category: schema.expenses.category,
-          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)`,
-          count: sql<number>`COUNT(*)`,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+          count: sql<number>`COUNT(*)::int`,
         })
         .from(schema.expenses)
         .where(

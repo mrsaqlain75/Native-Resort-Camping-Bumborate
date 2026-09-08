@@ -43,13 +43,18 @@ export default function ExpensesPage() {
     return true;
   });
 
-  const total = filteredExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  const total = filteredExpenses.reduce(
+    (sum, e) => sum + Number(e.total ?? 0),
+    0
+  );
 
   const handleExport = () => {
     exportToExcel(
       filteredExpenses.map((e) => ({
         name: e.name,
-        amount: Number(e.amount),
+        unitPrice: Number(e.amount),
+        quantity: e.quantity ?? 0,
+        total: Number(e.total ?? 0),
         category: e.category,
         payment: e.paymentMethod,
         paidTo: e.paidTo,
@@ -160,7 +165,7 @@ export default function ExpensesPage() {
                           <TableCell><span className="px-2 py-1 rounded-full text-xs bg-[var(--muted)]">{e.category}</span></TableCell>
                           <TableCell className="text-xs">{format(new Date(e.dateTime), "MMM dd, yyyy")}</TableCell>
                           <TableCell className="text-xs">{e.paymentMethod}</TableCell>
-                          <TableCell className="text-right font-semibold text-red-600">Rs. {Number(e.amount).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-semibold text-red-600">Rs. {Number(e.total ?? 0).toLocaleString()}</TableCell>
                         </TableRow>
                       ))}
                       {filteredExpenses.length === 0 && (

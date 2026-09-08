@@ -11,7 +11,7 @@ import { BarChart3, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 const COLORS = ["#FF8080", "#FFCF96", "#F6FDC3", "#CDFAD5", "#88dd99", "#66bbdd"];
 
 export default function ProfitLoss() {
-  const [period, setPeriod] = useState<"daily" | "weekly" | "monthly" | "yearly">("monthly");
+  const [period, setPeriod] = useState<"daily" | "monthly" | "yearly">("monthly");
   const [from, setFrom] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
@@ -70,7 +70,6 @@ export default function ProfitLoss() {
                 <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
                   <SelectItem value="monthly">Monthly</SelectItem>
                   <SelectItem value="yearly">Yearly</SelectItem>
                 </SelectContent>

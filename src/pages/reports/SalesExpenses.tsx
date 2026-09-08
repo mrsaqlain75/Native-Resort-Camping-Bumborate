@@ -369,6 +369,8 @@ export default function SalesExpenses() {
                             <TableCell>
                               {record.services?.length > 0 ? record.services.map((s: any) => s.name).join(", ") : "-"}
                             </TableCell>
+                            <TableCell>{record.discountPercent ? `${record.discountPercent}%` : "-"}</TableCell>
+                            <TableCell>{record.taxPercent ? `${record.taxPercent}%` : "-"}</TableCell>
                             <TableCell>
                               <Badge variant="outline">{record.paymentMethod === "cash" ? "Cash" : "E-Transaction"}</Badge>
                             </TableCell>

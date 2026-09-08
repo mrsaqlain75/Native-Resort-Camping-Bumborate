@@ -1,9 +1,10 @@
-import { getDb } from "../api/queries/connection";
+import { getDb } from "../server/queries/connection";
 // TODO: import tables from "./schema"
 
 async function seed() {
   const db = getDb();
   console.log("Seeding database...");
+  void db;
 
   // TODO: insert seed data, e.g.
   // await db.insert(schema.posts).values([
@@ -11,7 +12,7 @@ async function seed() {
   // ]);
 
   console.log("Done.");
-  process.exit(0); // close MySQL connection pool
+  process.exit(0); // close Postgres connection pool
 }
 
 seed();

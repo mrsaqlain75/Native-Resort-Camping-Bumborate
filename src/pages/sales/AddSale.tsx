@@ -201,10 +201,6 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
     return menuItem ? String(menuItem.id) : undefined;
   };
 
-  const isCampingItem = (itemName: string) => {
-    return itemName === "🏕️ Camping";
-  };
-
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
@@ -482,7 +478,7 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
                   <p>Customer: {receiptSale.customerName}</p>
                   <p>Date: {format(new Date(receiptSale.dateTime), "MMM dd, yyyy hh:mm a")}</p>
                   <p>Payment: {receiptSale.paymentMethod === "cash" ? "Cash" : "E-Transaction"}</p>
-                  <p>Source: {receiptSale.source.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}</p>
+                  <p>Source: {receiptSale.source.replace("_", " ").replace(/\b\w/g, (l: string) => l.toUpperCase())}</p>
                 </div>
                 <table className="w-full text-xs">
                   <thead>

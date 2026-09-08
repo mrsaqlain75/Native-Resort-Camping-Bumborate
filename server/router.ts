@@ -6,6 +6,7 @@ import { campingRouter } from "./camping-router.js";
 import { reportsRouter } from "./reports-router.js";
 import { createRouter, publicQuery } from "./middleware.js";
 import { dataRouter } from "./data-router.js";
+import { cloudinaryRouter } from "./cloudinary-router.js";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -16,6 +17,7 @@ export const appRouter = createRouter({
   camping: campingRouter,
   reports: reportsRouter,
   data: dataRouter,
+  cloudinary: cloudinaryRouter,
 });
 
 export type AppRouter = typeof appRouter;
