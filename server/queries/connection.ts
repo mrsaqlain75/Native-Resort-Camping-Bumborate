@@ -1,7 +1,6 @@
 // server/queries/connection.ts
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { sql } from "drizzle-orm";
 import { env } from "../lib/env";
 import * as schema from "../../db/schema";
 
@@ -40,29 +39,6 @@ export function getDb() {
     instance = drizzle(client, { schema });
   }
   return instance;
-}
-
-/** Raw one-shot connectivity probe for the /api/dbcheck route. */
-export async function dbPing(): Promise<{
-  ok: boolean;
-  ms: number;
-  detail?: string;
-}> {
-  const started = Date.now();
-  try {
-    const rows = await getDb().execute(sql`select 1 as ok`);
-    return {
-      ok: true,
-      ms: Date.now() - started,
-      detail: JSON.stringify(rows),
-    };
-  } catch (err) {
-    return {
-      ok: false,
-      ms: Date.now() - started,
-      detail: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
-    };
-  }
 }
 
 // ── Cold-start resilience ─────────────────────────────────────
