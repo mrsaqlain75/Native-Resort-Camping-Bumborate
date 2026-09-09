@@ -43,7 +43,7 @@ export default function TodayReport() {
   const handleExport = () => {
     const data = [
       ...((sales || []).map((s) => ({ type: "Sale", date: format(new Date(s.dateTime), "yyyy-MM-dd HH:mm"), amount: Number(s.totalAmount), source: s.source, payment: s.paymentMethod }))),
-      ...((expenses || []).map((e) => ({ type: "Expense", date: format(new Date(e.dateTime), "yyyy-MM-dd HH:mm"), amount: Number(e.amount), category: e.category, payment: e.paymentMethod }))),
+      ...((expenses || []).map((e) => ({ type: "Expense", date: format(new Date(e.dateTime), "yyyy-MM-dd HH:mm"), amount: Number(e.total ?? e.amount), category: e.category, payment: e.paymentMethod }))),
       ...((camping || []).map((c) => ({ type: "Camping", date: format(new Date(c.dateTime), "yyyy-MM-dd HH:mm"), amount: Number(c.totalAmount), customer: c.customerName, payment: c.paymentMethod }))),
     ];
     exportToExcel(data, `Today_Report_${format(today, "yyyy-MM-dd")}.xlsx`);
@@ -118,7 +118,7 @@ export default function TodayReport() {
                   {expenses?.map((e) => (
                     <TableRow key={`e-${e.id}`}>
                       <TableCell className="text-xs">Expense</TableCell>
-                      <TableCell className="text-xs text-red-600">-Rs. {Number(e.amount).toLocaleString()}</TableCell>
+                      <TableCell className="text-xs text-red-600">-Rs. {Number(e.total ?? e.amount).toLocaleString()}</TableCell>
                       <TableCell className="text-xs">{e.paymentMethod}</TableCell>
                     </TableRow>
                   ))}

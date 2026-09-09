@@ -118,11 +118,15 @@ export default function SalesExpenses() {
     }
 
     if (searchTerm) {
+      const q = searchTerm.toLowerCase();
       records = records.filter((record) => {
         if (record.type === "restaurant") {
           const items = record.items || [];
           const itemNames = items.map((i: any) => i.name).join(" ");
-          return itemNames.toLowerCase().includes(searchTerm.toLowerCase());
+          return (
+            itemNames.toLowerCase().includes(q) ||
+            record.customerName?.toLowerCase().includes(q)
+          );
         } else if (record.type === "camping") {
           return record.customerName?.toLowerCase().includes(searchTerm.toLowerCase());
         } else {
