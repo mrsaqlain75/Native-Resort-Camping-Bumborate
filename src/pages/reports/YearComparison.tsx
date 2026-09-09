@@ -55,9 +55,9 @@ export default function YearComparison() {
             <CardContent className="space-y-3">
               <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Restaurant Sales</span><span className="font-semibold">Rs. {data.year1.sales.toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Camping Sales</span><span className="font-semibold">Rs. {data.year1.camping.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Total Income</span><span className="font-semibold text-green-600">Rs. {data.year1.income.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Expenses</span><span className="font-semibold text-red-600">Rs. {data.year1.expenses.toLocaleString()}</span></div>
-              <div className="flex justify-between border-t border-[var(--border)] pt-2"><span className="font-bold">Net Profit</span><span className={`font-bold ${data.year1.profit >= 0 ? "text-green-600" : "text-red-600"}`}>Rs. {data.year1.profit.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Total Income</span><span className="font-semibold text-[var(--positive)]">Rs. {data.year1.income.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Expenses</span><span className="font-semibold text-[var(--negative)]">Rs. {data.year1.expenses.toLocaleString()}</span></div>
+              <div className="flex justify-between border-t border-[var(--border)] pt-2"><span className="font-bold">Net Profit</span><span className={`font-bold ${data.year1.profit >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>Rs. {data.year1.profit.toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Profit Margin</span><span className="font-semibold">{data.year1.margin.toFixed(1)}%</span></div>
             </CardContent>
           </Card>
@@ -69,9 +69,9 @@ export default function YearComparison() {
             <CardContent className="space-y-3">
               <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Restaurant Sales</span><span className="font-semibold">Rs. {data.year2.sales.toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Camping Sales</span><span className="font-semibold">Rs. {data.year2.camping.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Total Income</span><span className="font-semibold text-green-600">Rs. {data.year2.income.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Expenses</span><span className="font-semibold text-red-600">Rs. {data.year2.expenses.toLocaleString()}</span></div>
-              <div className="flex justify-between border-t border-[var(--border)] pt-2"><span className="font-bold">Net Profit</span><span className={`font-bold ${data.year2.profit >= 0 ? "text-green-600" : "text-red-600"}`}>Rs. {data.year2.profit.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Total Income</span><span className="font-semibold text-[var(--positive)]">Rs. {data.year2.income.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Expenses</span><span className="font-semibold text-[var(--negative)]">Rs. {data.year2.expenses.toLocaleString()}</span></div>
+              <div className="flex justify-between border-t border-[var(--border)] pt-2"><span className="font-bold">Net Profit</span><span className={`font-bold ${data.year2.profit >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>Rs. {data.year2.profit.toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Profit Margin</span><span className="font-semibold">{data.year2.margin.toFixed(1)}%</span></div>
             </CardContent>
           </Card>
@@ -100,8 +100,8 @@ function ChangeCard({ title, value, isNegativeGood }: { title: string; value: nu
     <div className="p-4 rounded-lg bg-[var(--muted)]/30 space-y-2">
       <p className="text-sm text-[var(--muted-foreground)]">{title}</p>
       <div className="flex items-center gap-2">
-        {isGood ? <TrendingUp className="h-5 w-5 text-green-600" /> : <TrendingDown className="h-5 w-5 text-red-600" />}
-        <span className={`text-xl font-bold ${isGood ? "text-green-600" : "text-red-600"}`}>{value > 0 ? "+" : ""}{value.toFixed(1)}%</span>
+        {isGood ? <TrendingUp className="h-5 w-5 text-[var(--positive)]" /> : <TrendingDown className="h-5 w-5 text-[var(--negative)]" />}
+        <span className={`text-xl font-bold ${isGood ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>{value > 0 ? "+" : ""}{value.toFixed(1)}%</span>
       </div>
     </div>
   );

@@ -57,9 +57,9 @@ export default function MonthlyReport() {
               <XAxis dataKey="month" stroke="var(--muted-foreground)" fontSize={12} />
               <YAxis stroke="var(--muted-foreground)" fontSize={12} tickFormatter={(v) => `Rs.${v}`} />
               <Tooltip formatter={(v: number) => `Rs. ${v.toLocaleString()}`} contentStyle={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }} />
-              <Bar dataKey="sales" fill="#FF8080" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="camping" fill="#FFCF96" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="sales" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="camping" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="expenses" fill="var(--destructive)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -74,7 +74,7 @@ export default function MonthlyReport() {
               <XAxis dataKey="month" stroke="var(--muted-foreground)" fontSize={12} />
               <YAxis stroke="var(--muted-foreground)" fontSize={12} tickFormatter={(v) => `Rs.${v}`} />
               <Tooltip formatter={(v: number) => `Rs. ${v.toLocaleString()}`} contentStyle={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }} />
-              <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} dot={{ fill: "#22c55e" }} />
+              <Line type="monotone" dataKey="profit" stroke="var(--chart-3)" strokeWidth={2} dot={{ fill: "var(--chart-3)" }} />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>

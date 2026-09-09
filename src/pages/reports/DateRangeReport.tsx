@@ -82,15 +82,15 @@ export default function DateRangeReport() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[var(--muted-foreground)]">Total Income</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold text-green-600">Rs. {summary.totalIncome.toLocaleString()}</p></CardContent>
+              <CardContent><p className="text-2xl font-bold text-[var(--positive)]">Rs. {summary.totalIncome.toLocaleString()}</p></CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[var(--muted-foreground)]">Total Expenses</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold text-red-600">Rs. {summary.expenseTotal.toLocaleString()}</p></CardContent>
+              <CardContent><p className="text-2xl font-bold text-[var(--negative)]">Rs. {summary.expenseTotal.toLocaleString()}</p></CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[var(--muted-foreground)]">Net Profit</CardTitle></CardHeader>
-              <CardContent><p className={`text-2xl font-bold ${summary.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}>Rs. {summary.netProfit.toLocaleString()}</p></CardContent>
+              <CardContent><p className={`text-2xl font-bold ${summary.netProfit >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>Rs. {summary.netProfit.toLocaleString()}</p></CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[var(--muted-foreground)]">Profit Margin</CardTitle></CardHeader>
@@ -110,9 +110,9 @@ export default function DateRangeReport() {
                   <XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={12} />
                   <YAxis stroke="var(--muted-foreground)" fontSize={12} tickFormatter={(v) => `Rs.${v}`} />
                   <Tooltip formatter={(v: number) => `Rs. ${v.toLocaleString()}`} contentStyle={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }} />
-                  <Bar dataKey="sales" fill="#FF8080" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="camping" fill="#FFCF96" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="sales" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="camping" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="expenses" fill="var(--destructive)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
 
@@ -131,10 +131,10 @@ export default function DateRangeReport() {
                     {chartData.map((d) => (
                       <TableRow key={d.date}>
                         <TableCell className="font-medium">{d.date}</TableCell>
-                        <TableCell className="text-right text-green-600">Rs. {d.sales.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-[var(--positive)]">Rs. {d.sales.toLocaleString()}</TableCell>
                         <TableCell className="text-right text-amber-600">Rs. {d.camping.toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-red-600">Rs. {d.expenses.toLocaleString()}</TableCell>
-                        <TableCell className={`text-right font-semibold ${d.profit >= 0 ? "text-green-600" : "text-red-600"}`}>Rs. {d.profit.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-[var(--negative)]">Rs. {d.expenses.toLocaleString()}</TableCell>
+                        <TableCell className={`text-right font-semibold ${d.profit >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>Rs. {d.profit.toLocaleString()}</TableCell>
                       </TableRow>
                     ))}
                     {chartData.length === 0 && (

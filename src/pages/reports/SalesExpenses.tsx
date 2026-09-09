@@ -196,9 +196,9 @@ export default function SalesExpenses() {
   const isLoading = salesLoading || campingLoading || expensesLoading;
 
   const getRowColor = (type: string) => {
-    if (type === "restaurant") return "border-l-4 border-l-green-500";
-    if (type === "camping") return "border-l-4 border-l-blue-500";
-    return "border-l-4 border-l-red-500";
+    if (type === "restaurant") return "border-l-4 border-l-[var(--chart-1)]";
+    if (type === "camping") return "border-l-4 border-l-[var(--chart-2)]";
+    return "border-l-4 border-l-[var(--destructive)]";
   };
 
   const formatAmount = (amount: number) => `Rs. ${amount?.toLocaleString() || 0}`;
@@ -359,7 +359,7 @@ export default function SalesExpenses() {
                             <TableCell>
                               <Badge variant="outline">{record.paymentMethod === "cash" ? "Cash" : "E-Transaction"}</Badge>
                             </TableCell>
-                            <TableCell className="text-green-600 font-semibold">
+                            <TableCell className="text-[var(--positive)] font-semibold">
                               +{formatAmount(record.totalAmount)}
                             </TableCell>
                           </>
@@ -378,7 +378,7 @@ export default function SalesExpenses() {
                             <TableCell>
                               <Badge variant="outline">{record.paymentMethod === "cash" ? "Cash" : "E-Transaction"}</Badge>
                             </TableCell>
-                            <TableCell className="text-green-600 font-semibold">
+                            <TableCell className="text-[var(--positive)] font-semibold">
                               +{formatAmount(record.totalAmount)}
                             </TableCell>
                           </>

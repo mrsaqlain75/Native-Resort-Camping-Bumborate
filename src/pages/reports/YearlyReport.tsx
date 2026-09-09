@@ -55,10 +55,10 @@ export default function YearlyReport() {
               <XAxis dataKey="month" stroke="var(--muted-foreground)" fontSize={12} />
               <YAxis stroke="var(--muted-foreground)" fontSize={12} tickFormatter={(v) => `Rs.${v}`} />
               <Tooltip formatter={(v: number) => `Rs. ${v.toLocaleString()}`} contentStyle={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }} />
-              <Bar dataKey="sales" fill="#FF8080" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="camping" fill="#FFCF96" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="profit" fill="#22c55e" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="sales" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="camping" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="expenses" fill="var(--destructive)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="profit" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>

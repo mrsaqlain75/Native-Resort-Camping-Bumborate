@@ -9,7 +9,7 @@ import {
 } from "recharts";
 import * as XLSX from "xlsx";
 
-const COLORS = ["#FF8080", "#FFCF96", "#F6FDC3", "#CDFAD5", "#88dd99", "#66bbdd", "#bb88dd"];
+const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-4)", "var(--chart-5)", "var(--chart-4)", "var(--chart-5)", "var(--chart-3)"];
 
 function exportToExcel(data: unknown[], filename: string) {
   const ws = XLSX.utils.json_to_sheet(data);
@@ -79,7 +79,7 @@ export default function TodayReport() {
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-[var(--muted-foreground)]">Net Profit</CardTitle></CardHeader>
-          <CardContent><p className={`text-2xl font-bold ${netProfit >= 0 ? "text-green-600" : "text-red-600"}`}>Rs. {netProfit.toLocaleString()}</p></CardContent>
+          <CardContent><p className={`text-2xl font-bold ${netProfit >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>Rs. {netProfit.toLocaleString()}</p></CardContent>
         </Card>
       </div>
 
@@ -111,21 +111,21 @@ export default function TodayReport() {
                   {sales?.map((s) => (
                     <TableRow key={`s-${s.id}`}>
                       <TableCell className="text-xs">Sale</TableCell>
-                      <TableCell className="text-xs text-green-600">+Rs. {Number(s.totalAmount).toLocaleString()}</TableCell>
+                      <TableCell className="text-xs text-[var(--positive)]">+Rs. {Number(s.totalAmount).toLocaleString()}</TableCell>
                       <TableCell className="text-xs">{s.paymentMethod}</TableCell>
                     </TableRow>
                   ))}
                   {expenses?.map((e) => (
                     <TableRow key={`e-${e.id}`}>
                       <TableCell className="text-xs">Expense</TableCell>
-                      <TableCell className="text-xs text-red-600">-Rs. {Number(e.total ?? e.amount).toLocaleString()}</TableCell>
+                      <TableCell className="text-xs text-[var(--negative)]">-Rs. {Number(e.total ?? e.amount).toLocaleString()}</TableCell>
                       <TableCell className="text-xs">{e.paymentMethod}</TableCell>
                     </TableRow>
                   ))}
                   {camping?.map((c) => (
                     <TableRow key={`c-${c.id}`}>
                       <TableCell className="text-xs">Camping</TableCell>
-                      <TableCell className="text-xs text-green-600">+Rs. {Number(c.totalAmount).toLocaleString()}</TableCell>
+                      <TableCell className="text-xs text-[var(--positive)]">+Rs. {Number(c.totalAmount).toLocaleString()}</TableCell>
                       <TableCell className="text-xs">{c.paymentMethod}</TableCell>
                     </TableRow>
                   ))}

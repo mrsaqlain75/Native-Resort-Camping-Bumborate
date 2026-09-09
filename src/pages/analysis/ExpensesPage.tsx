@@ -127,7 +127,7 @@ export default function ExpensesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[var(--muted-foreground)]">Total Expenses</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold text-red-600">Rs. {total.toLocaleString()}</p></CardContent>
+              <CardContent><p className="text-2xl font-bold text-[var(--negative)]">Rs. {total.toLocaleString()}</p></CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[var(--muted-foreground)]">Transaction Count</CardTitle></CardHeader>
@@ -165,7 +165,7 @@ export default function ExpensesPage() {
                           <TableCell><span className="px-2 py-1 rounded-full text-xs bg-[var(--muted)]">{e.category}</span></TableCell>
                           <TableCell className="text-xs">{format(new Date(e.dateTime), "MMM dd, yyyy")}</TableCell>
                           <TableCell className="text-xs">{e.paymentMethod}</TableCell>
-                          <TableCell className="text-right font-semibold text-red-600">Rs. {Number(e.total ?? 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-semibold text-[var(--negative)]">Rs. {Number(e.total ?? 0).toLocaleString()}</TableCell>
                         </TableRow>
                       ))}
                       {filteredExpenses.length === 0 && (

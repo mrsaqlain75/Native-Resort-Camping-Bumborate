@@ -294,7 +294,7 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
               <span>Rs. {subtotal.toLocaleString()}</span>
             </div>
             {discountPercent > 0 && (
-              <div className="flex justify-between text-sm text-green-600">
+              <div className="flex justify-between text-sm text-[var(--positive)]">
                 <span>Discount ({discountPercent}%):</span>
                 <span>- Rs. {discountAmount.toLocaleString()}</span>
               </div>
@@ -362,7 +362,7 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
             {receiptData && (
               <div className="bg-white text-black p-6 rounded-lg space-y-4" id="camping-receipt">
                 <div className="text-center border-b border-black pb-3">
-                  <h2 className="text-xl font-bold font-serif">Native Resort & Camping</h2>
+                  <h2 className="text-xl font-bold font-serif">Native Camping and Restaurant</h2>
                   <p className="text-xs">Bumburate</p>
                 </div>
                 <div className="text-xs space-y-1">
@@ -399,7 +399,7 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
                     <span>Rs. {receiptData.subtotal?.toLocaleString() || 0}</span>
                   </div>
                   {receiptData.discountPercent > 0 && (
-                    <div className="flex justify-between text-xs text-green-600">
+                    <div className="flex justify-between text-xs text-[var(--positive)]">
                       <span>Discount ({receiptData.discountPercent}%):</span>
                       <span>- Rs. {((receiptData.subtotal * receiptData.discountPercent) / 100).toLocaleString()}</span>
                     </div>

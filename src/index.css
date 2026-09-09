@@ -4,75 +4,94 @@
 
 @layer base {
   :root {
-    --background: #F6FDC3;
-    --foreground: #1a1a1a;
-    --card: #ffffff;
-    --card-foreground: #1a1a1a;
-    --popover: #ffffff;
-    --popover-foreground: #1a1a1a;
-    --primary: #FF8080;
-    --primary-foreground: #ffffff;
-    --secondary: #FFCF96;
-    --secondary-foreground: #1a1a1a;
-    --muted: #CDFAD5;
-    --muted-foreground: #4a4a4a;
-    --accent: #CDFAD5;
-    --accent-foreground: #1a1a1a;
-    --destructive: #ef4444;
-    --destructive-foreground: #ffffff;
-    --border: rgba(0, 0, 0, 0.08);
-    --input: rgba(0, 0, 0, 0.08);
-    --ring: #FF8080;
-    --radius: 0.75rem;
-    --chart-1: #FF8080;
-    --chart-2: #FFCF96;
-    --chart-3: #F6FDC3;
-    --chart-4: #CDFAD5;
-    --chart-5: #88dd99;
-    --sidebar: #ffffff;
-    --sidebar-foreground: #1a1a1a;
-    --sidebar-primary: #FF8080;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #F6FDC3;
-    --sidebar-accent-foreground: #1a1a1a;
-    --sidebar-border: rgba(0, 0, 0, 0.08);
-    --sidebar-ring: #FF8080;
+    /* ── Native Camping and Restaurant — "mountain & pine" palette ── */
+    --background: #f5f2ec;      /* warm oat paper */
+    --foreground: #23211c;      /* warm near-black */
+    --card: #fffdf9;
+    --card-foreground: #23211c;
+    --popover: #fffdf9;
+    --popover-foreground: #23211c;
+
+    --primary: #3f6f52;         /* pine / forest green */
+    --primary-foreground: #f6f3ec;
+    --secondary: #e9e3d6;       /* soft sand */
+    --secondary-foreground: #3a362e;
+    --muted: #ece7dd;           /* light stone */
+    --muted-foreground: #6c6558;
+    --accent: #e7e1d4;          /* subtle hover surface */
+    --accent-foreground: #33302a;
+
+    --destructive: #b8452f;     /* warm brick red */
+    --destructive-foreground: #f6f3ec;
+
+    --border: rgba(35, 33, 28, 0.1);
+    --input: rgba(35, 33, 28, 0.14);
+    --ring: #3f6f52;
+    --radius: 0.9rem;
+
+    /* Chart / category colors */
+    --chart-1: #3f6f52;         /* forest — sales / revenue */
+    --chart-2: #c17a4a;         /* terracotta — camping */
+    --chart-3: #cca94f;         /* wheat gold — profit */
+    --chart-4: #7ba17d;         /* sage */
+    --chart-5: #5b7c99;         /* slate blue */
+
+    /* Semantic (used for +/- figures) */
+    --positive: #3f6f52;
+    --negative: #b8452f;
+
+    --sidebar: #fbf9f4;
+    --sidebar-foreground: #2c2a24;
+    --sidebar-primary: #3f6f52;
+    --sidebar-primary-foreground: #f6f3ec;
+    --sidebar-accent: #ede7dc;
+    --sidebar-accent-foreground: #2c2a24;
+    --sidebar-border: rgba(35, 33, 28, 0.08);
+    --sidebar-ring: #3f6f52;
   }
 
   .dark {
-    --background: #1a1a1a;
-    --foreground: #f0f0f0;
-    --card: #2d2d2d;
-    --card-foreground: #f0f0f0;
-    --popover: #2d2d2d;
-    --popover-foreground: #f0f0f0;
-    --primary: #FF8080;
-    --primary-foreground: #1a1a1a;
-    --secondary: #FFCF96;
-    --secondary-foreground: #1a1a1a;
-    --muted: #2d2d2d;
-    --muted-foreground: #a0a0a0;
-    --accent: #2d2d2d;
-    --accent-foreground: #f0f0f0;
-    --destructive: #ef4444;
-    --destructive-foreground: #ffffff;
-    --border: rgba(255, 255, 255, 0.08);
-    --input: rgba(255, 255, 255, 0.08);
-    --ring: #FF8080;
-    --radius: 0.75rem;
-    --chart-1: #FF8080;
-    --chart-2: #FFCF96;
-    --chart-3: #F6FDC3;
-    --chart-4: #CDFAD5;
-    --chart-5: #88dd99;
-    --sidebar: #2d2d2d;
-    --sidebar-foreground: #f0f0f0;
-    --sidebar-primary: #FF8080;
-    --sidebar-primary-foreground: #1a1a1a;
-    --sidebar-accent: #3d3d3d;
-    --sidebar-accent-foreground: #f0f0f0;
-    --sidebar-border: rgba(255, 255, 255, 0.08);
-    --sidebar-ring: #FF8080;
+    --background: #181a17;      /* warm charcoal, faint green */
+    --foreground: #ece7dd;      /* warm cream */
+    --card: #20231f;
+    --card-foreground: #ece7dd;
+    --popover: #20231f;
+    --popover-foreground: #ece7dd;
+
+    --primary: #74b891;         /* lifted pine for dark */
+    --primary-foreground: #10130e;
+    --secondary: #2e3129;
+    --secondary-foreground: #ece7dd;
+    --muted: #262a23;
+    --muted-foreground: #a7a094;
+    --accent: #2b2f27;
+    --accent-foreground: #ece7dd;
+
+    --destructive: #e07a5f;
+    --destructive-foreground: #10130e;
+
+    --border: rgba(236, 231, 221, 0.1);
+    --input: rgba(236, 231, 221, 0.14);
+    --ring: #74b891;
+    --radius: 0.9rem;
+
+    --chart-1: #74b891;
+    --chart-2: #d98e59;
+    --chart-3: #ddbd6a;
+    --chart-4: #8fbd91;
+    --chart-5: #7c9bb8;
+
+    --positive: #74b891;
+    --negative: #e07a5f;
+
+    --sidebar: #1c1f1b;
+    --sidebar-foreground: #e4dfd4;
+    --sidebar-primary: #74b891;
+    --sidebar-primary-foreground: #10130e;
+    --sidebar-accent: #282c24;
+    --sidebar-accent-foreground: #e4dfd4;
+    --sidebar-border: rgba(236, 231, 221, 0.08);
+    --sidebar-ring: #74b891;
   }
 
   * {
@@ -81,13 +100,19 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3 {
+    letter-spacing: -0.01em;
   }
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -96,7 +121,7 @@
 
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 3px;
+  border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {

@@ -370,7 +370,7 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
                 <span>Rs. {subtotal.toLocaleString()}</span>
               </div>
               {discountPercent > 0 && (
-                <div className="flex justify-between text-sm text-green-600">
+                <div className="flex justify-between text-sm text-[var(--positive)]">
                   <span>Discount ({discountPercent}%):</span>
                   <span>- Rs. {discountAmount.toLocaleString()}</span>
                 </div>
@@ -469,7 +469,7 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
             {receiptSale && (
               <div className="bg-white text-black p-6 rounded-lg space-y-4" id="receipt">
                 <div className="text-center border-b border-black pb-3">
-                  <h2 className="text-xl font-bold font-serif">Native Resort & Camping</h2>
+                  <h2 className="text-xl font-bold font-serif">Native Camping and Restaurant</h2>
                   <p className="text-xs">Bumburate</p>
                   <p className="text-xs">Guides . Cuisines . Events</p>
                 </div>
@@ -511,7 +511,7 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
                     <span>Rs. {receiptSale.subtotal.toLocaleString()}</span>
                   </div>
                   {receiptSale.discountPercent > 0 && (
-                    <div className="flex justify-between text-xs text-green-600">
+                    <div className="flex justify-between text-xs text-[var(--positive)]">
                       <span>Discount ({receiptSale.discountPercent}%):</span>
                       <span>- Rs. {((receiptSale.subtotal * receiptSale.discountPercent) / 100).toLocaleString()}</span>
                     </div>
@@ -528,7 +528,7 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
                   </div>
                 </div>
                 {receiptSale.note && <p className="text-xs text-gray-500">Note: {receiptSale.note}</p>}
-                <p className="text-center text-[10px] pt-2">Thank you for visiting Native Resort!</p>
+                <p className="text-center text-[10px] pt-2">Thank you for visiting Native Camping and Restaurant!</p>
                 <Button
                   className="w-full mt-2"
                   onClick={() => {

@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { BarChart3, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 
-const COLORS = ["#FF8080", "#FFCF96", "#F6FDC3", "#CDFAD5", "#88dd99", "#66bbdd"];
+const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-4)", "var(--chart-5)", "var(--chart-4)", "var(--chart-5)"];
 
 export default function ProfitLoss() {
   const [period, setPeriod] = useState<"daily" | "monthly" | "yearly">("monthly");
@@ -93,15 +93,15 @@ export default function ProfitLoss() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[var(--muted-foreground)] flex items-center gap-2"><DollarSign className="h-4 w-4" />Total Income</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold text-green-600">Rs. {summary.totalIncome.toLocaleString()}</p></CardContent>
+              <CardContent><p className="text-2xl font-bold text-[var(--positive)]">Rs. {summary.totalIncome.toLocaleString()}</p></CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[var(--muted-foreground)] flex items-center gap-2"><TrendingDown className="h-4 w-4" />Total Expenses</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold text-red-600">Rs. {summary.expenseTotal.toLocaleString()}</p></CardContent>
+              <CardContent><p className="text-2xl font-bold text-[var(--negative)]">Rs. {summary.expenseTotal.toLocaleString()}</p></CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[var(--muted-foreground)] flex items-center gap-2"><TrendingUp className="h-4 w-4" />Net Profit</CardTitle></CardHeader>
-              <CardContent><p className={`text-2xl font-bold ${summary.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}>Rs. {summary.netProfit.toLocaleString()}</p></CardContent>
+              <CardContent><p className={`text-2xl font-bold ${summary.netProfit >= 0 ? "text-[var(--positive)]" : "text-[var(--negative)]"}`}>Rs. {summary.netProfit.toLocaleString()}</p></CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[var(--muted-foreground)]">Profit Margin</CardTitle></CardHeader>
@@ -134,10 +134,10 @@ export default function ProfitLoss() {
                     <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={12} />
                     <YAxis stroke="var(--muted-foreground)" fontSize={12} tickFormatter={(v) => `Rs.${v}`} />
                     <Tooltip formatter={(v: number) => `Rs. ${v.toLocaleString()}`} contentStyle={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }} />
-                    <Bar dataKey="sales" fill="#FF8080" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="camping" fill="#FFCF96" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="profit" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="sales" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="camping" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="expenses" fill="var(--destructive)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="profit" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>

@@ -134,7 +134,7 @@ export default function IncomePage() {
             </Card>
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[var(--muted-foreground)]">Grand Total</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold text-green-600">Rs. {grandTotal.toLocaleString()}</p></CardContent>
+              <CardContent><p className="text-2xl font-bold text-[var(--positive)]">Rs. {grandTotal.toLocaleString()}</p></CardContent>
             </Card>
           </div>
 
@@ -155,7 +155,7 @@ export default function IncomePage() {
                   <TableBody>
                     {filteredSales.map((s) => (
                       <TableRow key={`s-${s.id}`}>
-                        <TableCell><span className="px-2 py-1 rounded-full text-xs bg-[#FF808020] text-[#FF8080]">Sale</span></TableCell>
+                        <TableCell><span className="px-2 py-1 rounded-full text-xs bg-[var(--chart-1)]/15 text-[var(--chart-1)]">Sale</span></TableCell>
                         <TableCell className="text-xs">{format(new Date(s.dateTime), "MMM dd, yyyy HH:mm")}</TableCell>
                         <TableCell className="text-xs">{s.items.map((i) => `${i.name} x${i.quantity}`).join(", ")}</TableCell>
                         <TableCell className="text-xs">{s.paymentMethod}</TableCell>
@@ -164,7 +164,7 @@ export default function IncomePage() {
                     ))}
                     {(camping || []).map((c) => (
                       <TableRow key={`c-${c.id}`}>
-                        <TableCell><span className="px-2 py-1 rounded-full text-xs bg-[#FFCF9620] text-[#FFCF96]">Camping</span></TableCell>
+                        <TableCell><span className="px-2 py-1 rounded-full text-xs bg-[var(--chart-2)]/15 text-[var(--chart-2)]">Camping</span></TableCell>
                         <TableCell className="text-xs">{format(new Date(c.dateTime), "MMM dd, yyyy HH:mm")}</TableCell>
                         <TableCell className="text-xs">{c.customerName} — {c.nights} nights</TableCell>
                         <TableCell className="text-xs">{c.paymentMethod}</TableCell>
