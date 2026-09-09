@@ -34,7 +34,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 
 // server/queries/connection.ts
-import { neon } from "@neondatabase/serverless";
+import { neon, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 
 // server/lib/env.ts
@@ -200,13 +200,40 @@ var campingSales = pgTable("camping_sales", {
 });
 
 // server/queries/connection.ts
+var baseFetch = globalThis.fetch.bind(globalThis);
+neonConfig.fetchFunction = (url, opts) => baseFetch(url, { ...opts, signal: AbortSignal.timeout(15e3) });
+function cleanUrl(raw) {
+  try {
+    const u = new URL(raw);
+    const keep = new URLSearchParams();
+    if (u.searchParams.get("sslmode")) keep.set("sslmode", "require");
+    u.search = keep.toString();
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
 var instance;
 function getDb() {
   if (!instance) {
-    const sql6 = neon(env.databaseUrl);
+    const sql6 = neon(cleanUrl(env.directUrl || env.databaseUrl));
     instance = drizzle(sql6, { schema: schema_exports });
   }
   return instance;
+}
+async function dbPing() {
+  const started = Date.now();
+  try {
+    const sql6 = neon(cleanUrl(env.directUrl || env.databaseUrl));
+    const rows = await sql6`select 1 as ok`;
+    return { ok: true, ms: Date.now() - started, detail: JSON.stringify(rows) };
+  } catch (err) {
+    return {
+      ok: false,
+      ms: Date.now() - started,
+      detail: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+    };
+  }
 }
 var CONNECT_PHASE_ERRORS = [
   "econnrefused",
@@ -218,7 +245,10 @@ var CONNECT_PHASE_ERRORS = [
   "the database system is starting up",
   "fetch failed",
   "failed to fetch",
-  "und_err"
+  "und_err",
+  "timeouterror",
+  "aborted",
+  "the operation was aborted"
 ];
 var IN_FLIGHT_ERRORS = [
   "econnreset",
@@ -235,7 +265,7 @@ var IN_FLIGHT_ERRORS = [
 function matches(err, patterns) {
   let cur = err;
   for (let depth = 0; depth < 5 && cur; depth++) {
-    const text2 = (cur instanceof Error ? `${cur.message} ${cur.code ?? ""}` : String(cur)).toLowerCase();
+    const text2 = (cur instanceof Error ? `${cur.name} ${cur.message} ${cur.code ?? ""}` : String(cur)).toLowerCase();
     if (patterns.some((p) => text2.includes(p))) return true;
     cur = cur instanceof Error ? cur.cause : void 0;
   }
@@ -248,7 +278,7 @@ function isConnectPhaseError(err) {
   return matches(err, CONNECT_PHASE_ERRORS);
 }
 async function withDbRetry(fn) {
-  const backoff = [0, 500, 1500, 3500];
+  const backoff = [0, 400, 1200, 2500];
   let lastErr;
   for (let i = 0; i < backoff.length; i++) {
     if (backoff[i]) await new Promise((r) => setTimeout(r, backoff[i]));
@@ -1629,6 +1659,16 @@ var app = new Hono();
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.get("/health", (c) => c.json({ status: "ok" }));
 app.get("/api/health", (c) => c.json({ status: "ok" }));
+app.get("/api/dbcheck", async (c) => {
+  const which = env.directUrl || env.databaseUrl;
+  let host = "unknown";
+  try {
+    host = new URL(which).host;
+  } catch {
+  }
+  const result = await dbPing();
+  return c.json({ host, ...result });
+});
 app.use(
   "/api/trpc/*",
   (c) => fetchRequestHandler({

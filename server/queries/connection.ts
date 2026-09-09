@@ -1,28 +1,60 @@
 // server/queries/connection.ts
-import { neon } from "@neondatabase/serverless";
+import { neon, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { env } from "../lib/env";
 import * as schema from "../../db/schema";
+
+// Wrap every HTTP query with a hard timeout so a stuck request fails fast
+// (and can be retried) instead of hanging until the platform kills the
+// whole function.
+const baseFetch: typeof fetch = globalThis.fetch.bind(globalThis);
+neonConfig.fetchFunction = (url: string, opts: RequestInit) =>
+  baseFetch(url, { ...opts, signal: AbortSignal.timeout(15_000) });
+
+// The HTTP driver wants a plain connection string. Keep sslmode, drop
+// libpq-only params like channel_binding that the /sql endpoint ignores
+// (and that have tripped up some setups).
+function cleanUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    const keep = new URLSearchParams();
+    if (u.searchParams.get("sslmode")) keep.set("sslmode", "require");
+    u.search = keep.toString();
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
 
 let instance: ReturnType<typeof drizzle<typeof schema>> | undefined;
 
 export function getDb() {
   if (!instance) {
-    // HTTP (fetch) driver: no WebSocket, no connection pool. Each query is a
-    // single HTTPS request to Neon's SQL endpoint, which holds the request
-    // briefly while a suspended compute resumes. This is the robust choice
-    // for serverless (and for cross-region function <-> DB).
-    const sql = neon(env.databaseUrl);
+    // Use the direct (unpooled) URL — the HTTP /sql endpoint is the right
+    // path for serverless; the pooler is for the WebSocket/TCP driver.
+    const sql = neon(cleanUrl(env.directUrl || env.databaseUrl));
     instance = drizzle(sql, { schema });
   }
   return instance;
 }
 
+/** Raw one-shot connectivity probe for the /api/dbcheck route. */
+export async function dbPing(): Promise<{ ok: boolean; ms: number; detail?: string }> {
+  const started = Date.now();
+  try {
+    const sql = neon(cleanUrl(env.directUrl || env.databaseUrl));
+    const rows = await sql`select 1 as ok`;
+    return { ok: true, ms: Date.now() - started, detail: JSON.stringify(rows) };
+  } catch (err) {
+    return {
+      ok: false,
+      ms: Date.now() - started,
+      detail: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    };
+  }
+}
+
 // ── Cold-start resilience ─────────────────────────────────────
-// Neon's free-tier compute suspends after inactivity. The first hit has to
-// wake it, and can occasionally fail with a transient connection error
-// before it comes up. These helpers absorb that so it never surfaces on the
-// login screen.
 
 const CONNECT_PHASE_ERRORS = [
   "econnrefused",
@@ -35,6 +67,9 @@ const CONNECT_PHASE_ERRORS = [
   "fetch failed",
   "failed to fetch",
   "und_err",
+  "timeouterror",
+  "aborted",
+  "the operation was aborted",
 ];
 
 const IN_FLIGHT_ERRORS = [
@@ -55,7 +90,7 @@ function matches(err: unknown, patterns: string[]): boolean {
   for (let depth = 0; depth < 5 && cur; depth++) {
     const text = (
       cur instanceof Error
-        ? `${cur.message} ${(cur as { code?: string }).code ?? ""}`
+        ? `${cur.name} ${cur.message} ${(cur as { code?: string }).code ?? ""}`
         : String(cur)
     ).toLowerCase();
     if (patterns.some((p) => text.includes(p))) return true;
@@ -64,22 +99,16 @@ function matches(err: unknown, patterns: string[]): boolean {
   return false;
 }
 
-/** True for any transient connection error (wake-up or dropped socket). */
 export function isTransientDbError(err: unknown): boolean {
   return matches(err, [...CONNECT_PHASE_ERRORS, ...IN_FLIGHT_ERRORS]);
 }
 
-/**
- * True only for errors that provably happened before any statement ran, so
- * retrying is safe even for a write.
- */
 export function isConnectPhaseError(err: unknown): boolean {
   return matches(err, CONNECT_PHASE_ERRORS);
 }
 
-/** Runs a read, retrying a few times while the Neon compute wakes up. */
 export async function withDbRetry<T>(fn: () => Promise<T>): Promise<T> {
-  const backoff = [0, 500, 1500, 3500];
+  const backoff = [0, 400, 1200, 2500];
   let lastErr: unknown;
   for (let i = 0; i < backoff.length; i++) {
     if (backoff[i]) await new Promise((r) => setTimeout(r, backoff[i]));
