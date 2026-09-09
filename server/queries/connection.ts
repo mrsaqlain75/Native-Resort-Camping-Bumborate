@@ -1,24 +1,18 @@
 // server/queries/connection.ts
-import { neon, neonConfig } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { sql } from "drizzle-orm";
 import { env } from "../lib/env";
 import * as schema from "../../db/schema";
 
-// Wrap every HTTP query with a hard timeout so a stuck request fails fast
-// (and can be retried) instead of hanging until the platform kills the
-// whole function.
-const baseFetch: typeof fetch = globalThis.fetch.bind(globalThis);
-neonConfig.fetchFunction = (url: string, opts: RequestInit) =>
-  baseFetch(url, { ...opts, signal: AbortSignal.timeout(15_000) });
-
-// The HTTP driver wants a plain connection string. Keep sslmode, drop
-// libpq-only params like channel_binding that the /sql endpoint ignores
-// (and that have tripped up some setups).
+// Neon's pooled endpoint is pgbouncer in transaction mode: no session-level
+// prepared statements, so `prepare: false`. SSL + SNI (from the hostname) is
+// how Neon routes to the right compute, so it must stay on.
 function cleanUrl(raw: string): string {
   try {
     const u = new URL(raw);
     const keep = new URLSearchParams();
-    if (u.searchParams.get("sslmode")) keep.set("sslmode", "require");
+    keep.set("sslmode", "require");
     u.search = keep.toString();
     return u.toString();
   } catch {
@@ -26,25 +20,37 @@ function cleanUrl(raw: string): string {
   }
 }
 
+let client: ReturnType<typeof postgres> | undefined;
 let instance: ReturnType<typeof drizzle<typeof schema>> | undefined;
 
 export function getDb() {
   if (!instance) {
-    // Use the direct (unpooled) URL — the HTTP /sql endpoint is the right
-    // path for serverless; the pooler is for the WebSocket/TCP driver.
-    const sql = neon(cleanUrl(env.directUrl || env.databaseUrl));
-    instance = drizzle(sql, { schema });
+    client = postgres(cleanUrl(env.databaseUrl), {
+      max: 1,
+      prepare: false,
+      ssl: "require",
+      idle_timeout: 20,
+      connect_timeout: 15,
+    });
+    instance = drizzle(client, { schema });
   }
   return instance;
 }
 
 /** Raw one-shot connectivity probe for the /api/dbcheck route. */
-export async function dbPing(): Promise<{ ok: boolean; ms: number; detail?: string }> {
+export async function dbPing(): Promise<{
+  ok: boolean;
+  ms: number;
+  detail?: string;
+}> {
   const started = Date.now();
   try {
-    const sql = neon(cleanUrl(env.directUrl || env.databaseUrl));
-    const rows = await sql`select 1 as ok`;
-    return { ok: true, ms: Date.now() - started, detail: JSON.stringify(rows) };
+    const rows = await getDb().execute(sql`select 1 as ok`);
+    return {
+      ok: true,
+      ms: Date.now() - started,
+      detail: JSON.stringify(rows),
+    };
   } catch (err) {
     return {
       ok: false,
@@ -70,6 +76,8 @@ const CONNECT_PHASE_ERRORS = [
   "timeouterror",
   "aborted",
   "the operation was aborted",
+  "connect timeout",
+  "write connect_timeout",
 ];
 
 const IN_FLIGHT_ERRORS = [
@@ -83,6 +91,7 @@ const IN_FLIGHT_ERRORS = [
   "socket hang up",
   "client has encountered a connection error",
   "terminated",
+  "cannot use a pool after calling end",
 ];
 
 function matches(err: unknown, patterns: string[]): boolean {

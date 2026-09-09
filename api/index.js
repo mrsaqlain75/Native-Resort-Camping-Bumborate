@@ -34,8 +34,9 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 
 // server/queries/connection.ts
-import { neon, neonConfig } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { sql } from "drizzle-orm";
 
 // server/lib/env.ts
 import { z } from "zod";
@@ -200,33 +201,41 @@ var campingSales = pgTable("camping_sales", {
 });
 
 // server/queries/connection.ts
-var baseFetch = globalThis.fetch.bind(globalThis);
-neonConfig.fetchFunction = (url, opts) => baseFetch(url, { ...opts, signal: AbortSignal.timeout(15e3) });
 function cleanUrl(raw) {
   try {
     const u = new URL(raw);
     const keep = new URLSearchParams();
-    if (u.searchParams.get("sslmode")) keep.set("sslmode", "require");
+    keep.set("sslmode", "require");
     u.search = keep.toString();
     return u.toString();
   } catch {
     return raw;
   }
 }
+var client;
 var instance;
 function getDb() {
   if (!instance) {
-    const sql6 = neon(cleanUrl(env.directUrl || env.databaseUrl));
-    instance = drizzle(sql6, { schema: schema_exports });
+    client = postgres(cleanUrl(env.databaseUrl), {
+      max: 1,
+      prepare: false,
+      ssl: "require",
+      idle_timeout: 20,
+      connect_timeout: 15
+    });
+    instance = drizzle(client, { schema: schema_exports });
   }
   return instance;
 }
 async function dbPing() {
   const started = Date.now();
   try {
-    const sql6 = neon(cleanUrl(env.directUrl || env.databaseUrl));
-    const rows = await sql6`select 1 as ok`;
-    return { ok: true, ms: Date.now() - started, detail: JSON.stringify(rows) };
+    const rows = await getDb().execute(sql`select 1 as ok`);
+    return {
+      ok: true,
+      ms: Date.now() - started,
+      detail: JSON.stringify(rows)
+    };
   } catch (err) {
     return {
       ok: false,
@@ -248,7 +257,9 @@ var CONNECT_PHASE_ERRORS = [
   "und_err",
   "timeouterror",
   "aborted",
-  "the operation was aborted"
+  "the operation was aborted",
+  "connect timeout",
+  "write connect_timeout"
 ];
 var IN_FLIGHT_ERRORS = [
   "econnreset",
@@ -260,7 +271,8 @@ var IN_FLIGHT_ERRORS = [
   "connection ended unexpectedly",
   "socket hang up",
   "client has encountered a connection error",
-  "terminated"
+  "terminated",
+  "cannot use a pool after calling end"
 ];
 function matches(err, patterns) {
   let cur = err;
@@ -546,7 +558,7 @@ var menuRouter = createRouter({
 
 // server/sales-router.ts
 import { z as z4 } from "zod";
-import { eq as eq3, desc as desc2, gte, lte, and, sql } from "drizzle-orm";
+import { eq as eq3, desc as desc2, gte, lte, and, sql as sql2 } from "drizzle-orm";
 var salesRouter = createRouter({
   list: authedQuery.query(async () => {
     const db = getDb();
@@ -611,16 +623,16 @@ var salesRouter = createRouter({
     const today = /* @__PURE__ */ new Date();
     today.setHours(0, 0, 0, 0);
     const rows = await db.select({
-      total: sql`COALESCE(SUM(${sales.totalAmount}), 0)::float`,
-      count: sql`COUNT(*)::int`
+      total: sql2`COALESCE(SUM(${sales.totalAmount}), 0)::float`,
+      count: sql2`COUNT(*)::int`
     }).from(sales).where(gte(sales.dateTime, today));
     return rows[0];
   }),
   summaryByDateRange: authedQuery.input(z4.object({ from: z4.string(), to: z4.string() })).query(async ({ input }) => {
     const db = getDb();
     const rows = await db.select({
-      total: sql`COALESCE(SUM(${sales.totalAmount}), 0)::float`,
-      count: sql`COUNT(*)::int`
+      total: sql2`COALESCE(SUM(${sales.totalAmount}), 0)::float`,
+      count: sql2`COUNT(*)::int`
     }).from(sales).where(
       and(
         gte(sales.dateTime, new Date(input.from)),
@@ -632,15 +644,15 @@ var salesRouter = createRouter({
   dailyBreakdown: authedQuery.input(z4.object({ from: z4.string(), to: z4.string() })).query(async ({ input }) => {
     const db = getDb();
     const rows = await db.select({
-      date: sql`to_char(${sales.dateTime}, 'YYYY-MM-DD')`,
-      total: sql`COALESCE(SUM(${sales.totalAmount}), 0)::float`,
-      count: sql`COUNT(*)::int`
+      date: sql2`to_char(${sales.dateTime}, 'YYYY-MM-DD')`,
+      total: sql2`COALESCE(SUM(${sales.totalAmount}), 0)::float`,
+      count: sql2`COUNT(*)::int`
     }).from(sales).where(
       and(
         gte(sales.dateTime, new Date(input.from)),
         lte(sales.dateTime, new Date(input.to))
       )
-    ).groupBy(sql`to_char(${sales.dateTime}, 'YYYY-MM-DD')`).orderBy(sql`to_char(${sales.dateTime}, 'YYYY-MM-DD')`);
+    ).groupBy(sql2`to_char(${sales.dateTime}, 'YYYY-MM-DD')`).orderBy(sql2`to_char(${sales.dateTime}, 'YYYY-MM-DD')`);
     return rows;
   }),
   update: authedQuery.input(
@@ -683,24 +695,24 @@ var salesRouter = createRouter({
     const from = new Date(input.year, 0, 1);
     const to = new Date(input.year + 1, 0, 1);
     const rows = await db.select({
-      month: sql`EXTRACT(MONTH FROM ${sales.dateTime})::int`,
-      total: sql`COALESCE(SUM(${sales.totalAmount}), 0)::float`,
-      count: sql`COUNT(*)::int`
+      month: sql2`EXTRACT(MONTH FROM ${sales.dateTime})::int`,
+      total: sql2`COALESCE(SUM(${sales.totalAmount}), 0)::float`,
+      count: sql2`COUNT(*)::int`
     }).from(sales).where(
       and(
         gte(sales.dateTime, from),
         lte(sales.dateTime, to)
       )
-    ).groupBy(sql`EXTRACT(MONTH FROM ${sales.dateTime})`).orderBy(sql`EXTRACT(MONTH FROM ${sales.dateTime})`);
+    ).groupBy(sql2`EXTRACT(MONTH FROM ${sales.dateTime})`).orderBy(sql2`EXTRACT(MONTH FROM ${sales.dateTime})`);
     return rows;
   }),
   yearlyBreakdown: authedQuery.query(async () => {
     const db = getDb();
     const rows = await db.select({
-      year: sql`EXTRACT(YEAR FROM ${sales.dateTime})::int`,
-      total: sql`COALESCE(SUM(${sales.totalAmount}), 0)::float`,
-      count: sql`COUNT(*)::int`
-    }).from(sales).groupBy(sql`EXTRACT(YEAR FROM ${sales.dateTime})`).orderBy(sql`EXTRACT(YEAR FROM ${sales.dateTime})`);
+      year: sql2`EXTRACT(YEAR FROM ${sales.dateTime})::int`,
+      total: sql2`COALESCE(SUM(${sales.totalAmount}), 0)::float`,
+      count: sql2`COUNT(*)::int`
+    }).from(sales).groupBy(sql2`EXTRACT(YEAR FROM ${sales.dateTime})`).orderBy(sql2`EXTRACT(YEAR FROM ${sales.dateTime})`);
     return rows;
   }),
   sellingRankings: authedQuery.input(
@@ -739,7 +751,7 @@ var salesRouter = createRouter({
 
 // server/expenses-router.ts
 import { z as z5 } from "zod";
-import { eq as eq4, desc as desc3, gte as gte2, lte as lte2, and as and2, sql as sql2 } from "drizzle-orm";
+import { eq as eq4, desc as desc3, gte as gte2, lte as lte2, and as and2, sql as sql3 } from "drizzle-orm";
 var expensesRouter = createRouter({
   list: authedQuery.query(async () => {
     const db = getDb();
@@ -885,16 +897,16 @@ var expensesRouter = createRouter({
     const today = /* @__PURE__ */ new Date();
     today.setHours(0, 0, 0, 0);
     const rows = await db.select({
-      total: sql2`COALESCE(SUM(${expenses.total}), 0)::float`,
-      count: sql2`COUNT(*)::int`
+      total: sql3`COALESCE(SUM(${expenses.total}), 0)::float`,
+      count: sql3`COUNT(*)::int`
     }).from(expenses).where(gte2(expenses.dateTime, today));
     return rows[0];
   }),
   summaryByDateRange: authedQuery.input(z5.object({ from: z5.string(), to: z5.string() })).query(async ({ input }) => {
     const db = getDb();
     const rows = await db.select({
-      total: sql2`COALESCE(SUM(${expenses.total}), 0)::float`,
-      count: sql2`COUNT(*)::int`
+      total: sql3`COALESCE(SUM(${expenses.total}), 0)::float`,
+      count: sql3`COUNT(*)::int`
     }).from(expenses).where(
       and2(
         gte2(expenses.dateTime, new Date(input.from)),
@@ -906,15 +918,15 @@ var expensesRouter = createRouter({
   dailyBreakdown: authedQuery.input(z5.object({ from: z5.string(), to: z5.string() })).query(async ({ input }) => {
     const db = getDb();
     const rows = await db.select({
-      date: sql2`to_char(${expenses.dateTime}, 'YYYY-MM-DD')`,
-      total: sql2`COALESCE(SUM(${expenses.total}), 0)::float`,
-      count: sql2`COUNT(*)::int`
+      date: sql3`to_char(${expenses.dateTime}, 'YYYY-MM-DD')`,
+      total: sql3`COALESCE(SUM(${expenses.total}), 0)::float`,
+      count: sql3`COUNT(*)::int`
     }).from(expenses).where(
       and2(
         gte2(expenses.dateTime, new Date(input.from)),
         lte2(expenses.dateTime, new Date(input.to))
       )
-    ).groupBy(sql2`to_char(${expenses.dateTime}, 'YYYY-MM-DD')`).orderBy(sql2`to_char(${expenses.dateTime}, 'YYYY-MM-DD')`);
+    ).groupBy(sql3`to_char(${expenses.dateTime}, 'YYYY-MM-DD')`).orderBy(sql3`to_char(${expenses.dateTime}, 'YYYY-MM-DD')`);
     return rows;
   }),
   monthlyBreakdown: authedQuery.input(z5.object({ year: z5.number() })).query(async ({ input }) => {
@@ -922,32 +934,32 @@ var expensesRouter = createRouter({
     const from = new Date(input.year, 0, 1);
     const to = new Date(input.year + 1, 0, 1);
     const rows = await db.select({
-      month: sql2`EXTRACT(MONTH FROM ${expenses.dateTime})::int`,
-      total: sql2`COALESCE(SUM(${expenses.total}), 0)::float`,
-      count: sql2`COUNT(*)::int`
+      month: sql3`EXTRACT(MONTH FROM ${expenses.dateTime})::int`,
+      total: sql3`COALESCE(SUM(${expenses.total}), 0)::float`,
+      count: sql3`COUNT(*)::int`
     }).from(expenses).where(
       and2(
         gte2(expenses.dateTime, from),
         lte2(expenses.dateTime, to)
       )
-    ).groupBy(sql2`EXTRACT(MONTH FROM ${expenses.dateTime})`).orderBy(sql2`EXTRACT(MONTH FROM ${expenses.dateTime})`);
+    ).groupBy(sql3`EXTRACT(MONTH FROM ${expenses.dateTime})`).orderBy(sql3`EXTRACT(MONTH FROM ${expenses.dateTime})`);
     return rows;
   }),
   yearlyBreakdown: authedQuery.query(async () => {
     const db = getDb();
     const rows = await db.select({
-      year: sql2`EXTRACT(YEAR FROM ${expenses.dateTime})::int`,
-      total: sql2`COALESCE(SUM(${expenses.total}), 0)::float`,
-      count: sql2`COUNT(*)::int`
-    }).from(expenses).groupBy(sql2`EXTRACT(YEAR FROM ${expenses.dateTime})`).orderBy(sql2`EXTRACT(YEAR FROM ${expenses.dateTime})`);
+      year: sql3`EXTRACT(YEAR FROM ${expenses.dateTime})::int`,
+      total: sql3`COALESCE(SUM(${expenses.total}), 0)::float`,
+      count: sql3`COUNT(*)::int`
+    }).from(expenses).groupBy(sql3`EXTRACT(YEAR FROM ${expenses.dateTime})`).orderBy(sql3`EXTRACT(YEAR FROM ${expenses.dateTime})`);
     return rows;
   }),
   categoryBreakdown: authedQuery.input(z5.object({ from: z5.string(), to: z5.string() })).query(async ({ input }) => {
     const db = getDb();
     const rows = await db.select({
       category: expenses.category,
-      total: sql2`COALESCE(SUM(${expenses.total}), 0)::float`,
-      count: sql2`COUNT(*)::int`
+      total: sql3`COALESCE(SUM(${expenses.total}), 0)::float`,
+      count: sql3`COUNT(*)::int`
     }).from(expenses).where(
       and2(
         gte2(expenses.dateTime, new Date(input.from)),
@@ -960,7 +972,7 @@ var expensesRouter = createRouter({
 
 // server/camping-router.ts
 import { z as z6 } from "zod";
-import { eq as eq5, desc as desc4, gte as gte3, lte as lte3, and as and3, sql as sql3 } from "drizzle-orm";
+import { eq as eq5, desc as desc4, gte as gte3, lte as lte3, and as and3, sql as sql4 } from "drizzle-orm";
 var campingRouter = createRouter({
   sales: {
     list: authedQuery.query(async () => {
@@ -1026,16 +1038,16 @@ var campingRouter = createRouter({
       const today = /* @__PURE__ */ new Date();
       today.setHours(0, 0, 0, 0);
       const rows = await db.select({
-        total: sql3`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`,
-        count: sql3`COUNT(*)::int`
+        total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`,
+        count: sql4`COUNT(*)::int`
       }).from(campingSales).where(gte3(campingSales.dateTime, today));
       return rows[0];
     }),
     summaryByDateRange: authedQuery.input(z6.object({ from: z6.string(), to: z6.string() })).query(async ({ input }) => {
       const db = getDb();
       const rows = await db.select({
-        total: sql3`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`,
-        count: sql3`COUNT(*)::int`
+        total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`,
+        count: sql4`COUNT(*)::int`
       }).from(campingSales).where(
         and3(
           gte3(campingSales.dateTime, new Date(input.from)),
@@ -1047,15 +1059,15 @@ var campingRouter = createRouter({
     dailyBreakdown: authedQuery.input(z6.object({ from: z6.string(), to: z6.string() })).query(async ({ input }) => {
       const db = getDb();
       const rows = await db.select({
-        date: sql3`to_char(${campingSales.dateTime}, 'YYYY-MM-DD')`,
-        total: sql3`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`,
-        count: sql3`COUNT(*)::int`
+        date: sql4`to_char(${campingSales.dateTime}, 'YYYY-MM-DD')`,
+        total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`,
+        count: sql4`COUNT(*)::int`
       }).from(campingSales).where(
         and3(
           gte3(campingSales.dateTime, new Date(input.from)),
           lte3(campingSales.dateTime, new Date(input.to))
         )
-      ).groupBy(sql3`to_char(${campingSales.dateTime}, 'YYYY-MM-DD')`).orderBy(sql3`to_char(${campingSales.dateTime}, 'YYYY-MM-DD')`);
+      ).groupBy(sql4`to_char(${campingSales.dateTime}, 'YYYY-MM-DD')`).orderBy(sql4`to_char(${campingSales.dateTime}, 'YYYY-MM-DD')`);
       return rows;
     }),
     monthlyBreakdown: authedQuery.input(z6.object({ year: z6.number() })).query(async ({ input }) => {
@@ -1063,15 +1075,15 @@ var campingRouter = createRouter({
       const from = new Date(input.year, 0, 1);
       const to = new Date(input.year + 1, 0, 1);
       const rows = await db.select({
-        month: sql3`EXTRACT(MONTH FROM ${campingSales.dateTime})::int`,
-        total: sql3`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`,
-        count: sql3`COUNT(*)::int`
+        month: sql4`EXTRACT(MONTH FROM ${campingSales.dateTime})::int`,
+        total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`,
+        count: sql4`COUNT(*)::int`
       }).from(campingSales).where(
         and3(
           gte3(campingSales.dateTime, from),
           lte3(campingSales.dateTime, to)
         )
-      ).groupBy(sql3`EXTRACT(MONTH FROM ${campingSales.dateTime})`).orderBy(sql3`EXTRACT(MONTH FROM ${campingSales.dateTime})`);
+      ).groupBy(sql4`EXTRACT(MONTH FROM ${campingSales.dateTime})`).orderBy(sql4`EXTRACT(MONTH FROM ${campingSales.dateTime})`);
       return rows;
     }),
     update: authedQuery.input(
@@ -1117,10 +1129,10 @@ var campingRouter = createRouter({
     yearlyBreakdown: authedQuery.query(async () => {
       const db = getDb();
       const rows = await db.select({
-        year: sql3`EXTRACT(YEAR FROM ${campingSales.dateTime})::int`,
-        total: sql3`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`,
-        count: sql3`COUNT(*)::int`
-      }).from(campingSales).groupBy(sql3`EXTRACT(YEAR FROM ${campingSales.dateTime})`).orderBy(sql3`EXTRACT(YEAR FROM ${campingSales.dateTime})`);
+        year: sql4`EXTRACT(YEAR FROM ${campingSales.dateTime})::int`,
+        total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`,
+        count: sql4`COUNT(*)::int`
+      }).from(campingSales).groupBy(sql4`EXTRACT(YEAR FROM ${campingSales.dateTime})`).orderBy(sql4`EXTRACT(YEAR FROM ${campingSales.dateTime})`);
       return rows;
     })
   }
@@ -1128,15 +1140,15 @@ var campingRouter = createRouter({
 
 // server/reports-router.ts
 import { z as z7 } from "zod";
-import { gte as gte4, lte as lte4, and as and4, desc as desc5, sql as sql4 } from "drizzle-orm";
+import { gte as gte4, lte as lte4, and as and4, desc as desc5, sql as sql5 } from "drizzle-orm";
 var reportsRouter = createRouter({
   profitLoss: authedQuery.input(z7.object({ from: z7.string(), to: z7.string() })).query(async ({ input }) => {
     const db = getDb();
     const fromDate = new Date(input.from);
     const toDate = new Date(input.to);
     const [salesRows] = await db.select({
-      total: sql4`COALESCE(SUM(${sales.totalAmount}), 0)::float`,
-      count: sql4`COUNT(*)::int`
+      total: sql5`COALESCE(SUM(${sales.totalAmount}), 0)::float`,
+      count: sql5`COUNT(*)::int`
     }).from(sales).where(
       and4(
         gte4(sales.dateTime, fromDate),
@@ -1144,8 +1156,8 @@ var reportsRouter = createRouter({
       )
     );
     const [expenseRows] = await db.select({
-      total: sql4`COALESCE(SUM(${expenses.total}), 0)::float`,
-      count: sql4`COUNT(*)::int`
+      total: sql5`COALESCE(SUM(${expenses.total}), 0)::float`,
+      count: sql5`COUNT(*)::int`
     }).from(expenses).where(
       and4(
         gte4(expenses.dateTime, fromDate),
@@ -1153,8 +1165,8 @@ var reportsRouter = createRouter({
       )
     );
     const [campingRows] = await db.select({
-      total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`,
-      count: sql4`COUNT(*)::int`
+      total: sql5`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`,
+      count: sql5`COUNT(*)::int`
     }).from(campingSales).where(
       and4(
         gte4(campingSales.dateTime, fromDate),
@@ -1184,32 +1196,32 @@ var reportsRouter = createRouter({
     const fromDate = new Date(input.from);
     const toDate = new Date(input.to);
     const salesRows = await db.select({
-      date: sql4`to_char(${sales.dateTime}, 'YYYY-MM-DD')`,
-      total: sql4`COALESCE(SUM(${sales.totalAmount}), 0)::float`
+      date: sql5`to_char(${sales.dateTime}, 'YYYY-MM-DD')`,
+      total: sql5`COALESCE(SUM(${sales.totalAmount}), 0)::float`
     }).from(sales).where(
       and4(
         gte4(sales.dateTime, fromDate),
         lte4(sales.dateTime, toDate)
       )
-    ).groupBy(sql4`to_char(${sales.dateTime}, 'YYYY-MM-DD')`).orderBy(sql4`to_char(${sales.dateTime}, 'YYYY-MM-DD')`);
+    ).groupBy(sql5`to_char(${sales.dateTime}, 'YYYY-MM-DD')`).orderBy(sql5`to_char(${sales.dateTime}, 'YYYY-MM-DD')`);
     const expenseRows = await db.select({
-      date: sql4`to_char(${expenses.dateTime}, 'YYYY-MM-DD')`,
-      total: sql4`COALESCE(SUM(${expenses.total}), 0)::float`
+      date: sql5`to_char(${expenses.dateTime}, 'YYYY-MM-DD')`,
+      total: sql5`COALESCE(SUM(${expenses.total}), 0)::float`
     }).from(expenses).where(
       and4(
         gte4(expenses.dateTime, fromDate),
         lte4(expenses.dateTime, toDate)
       )
-    ).groupBy(sql4`to_char(${expenses.dateTime}, 'YYYY-MM-DD')`).orderBy(sql4`to_char(${expenses.dateTime}, 'YYYY-MM-DD')`);
+    ).groupBy(sql5`to_char(${expenses.dateTime}, 'YYYY-MM-DD')`).orderBy(sql5`to_char(${expenses.dateTime}, 'YYYY-MM-DD')`);
     const campingRows = await db.select({
-      date: sql4`to_char(${campingSales.dateTime}, 'YYYY-MM-DD')`,
-      total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
+      date: sql5`to_char(${campingSales.dateTime}, 'YYYY-MM-DD')`,
+      total: sql5`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
     }).from(campingSales).where(
       and4(
         gte4(campingSales.dateTime, fromDate),
         lte4(campingSales.dateTime, toDate)
       )
-    ).groupBy(sql4`to_char(${campingSales.dateTime}, 'YYYY-MM-DD')`).orderBy(sql4`to_char(${campingSales.dateTime}, 'YYYY-MM-DD')`);
+    ).groupBy(sql5`to_char(${campingSales.dateTime}, 'YYYY-MM-DD')`).orderBy(sql5`to_char(${campingSales.dateTime}, 'YYYY-MM-DD')`);
     const dateMap = /* @__PURE__ */ new Map();
     for (const row of salesRows) {
       const d = dateMap.get(row.date) || {
@@ -1256,32 +1268,32 @@ var reportsRouter = createRouter({
     const fromDate = new Date(input.year, 0, 1);
     const toDate = new Date(input.year + 1, 0, 1);
     const salesRows = await db.select({
-      month: sql4`EXTRACT(MONTH FROM ${sales.dateTime})::int`,
-      total: sql4`COALESCE(SUM(${sales.totalAmount}), 0)::float`
+      month: sql5`EXTRACT(MONTH FROM ${sales.dateTime})::int`,
+      total: sql5`COALESCE(SUM(${sales.totalAmount}), 0)::float`
     }).from(sales).where(
       and4(
         gte4(sales.dateTime, fromDate),
         lte4(sales.dateTime, toDate)
       )
-    ).groupBy(sql4`EXTRACT(MONTH FROM ${sales.dateTime})`).orderBy(sql4`EXTRACT(MONTH FROM ${sales.dateTime})`);
+    ).groupBy(sql5`EXTRACT(MONTH FROM ${sales.dateTime})`).orderBy(sql5`EXTRACT(MONTH FROM ${sales.dateTime})`);
     const expenseRows = await db.select({
-      month: sql4`EXTRACT(MONTH FROM ${expenses.dateTime})::int`,
-      total: sql4`COALESCE(SUM(${expenses.total}), 0)::float`
+      month: sql5`EXTRACT(MONTH FROM ${expenses.dateTime})::int`,
+      total: sql5`COALESCE(SUM(${expenses.total}), 0)::float`
     }).from(expenses).where(
       and4(
         gte4(expenses.dateTime, fromDate),
         lte4(expenses.dateTime, toDate)
       )
-    ).groupBy(sql4`EXTRACT(MONTH FROM ${expenses.dateTime})`).orderBy(sql4`EXTRACT(MONTH FROM ${expenses.dateTime})`);
+    ).groupBy(sql5`EXTRACT(MONTH FROM ${expenses.dateTime})`).orderBy(sql5`EXTRACT(MONTH FROM ${expenses.dateTime})`);
     const campingRows = await db.select({
-      month: sql4`EXTRACT(MONTH FROM ${campingSales.dateTime})::int`,
-      total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
+      month: sql5`EXTRACT(MONTH FROM ${campingSales.dateTime})::int`,
+      total: sql5`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
     }).from(campingSales).where(
       and4(
         gte4(campingSales.dateTime, fromDate),
         lte4(campingSales.dateTime, toDate)
       )
-    ).groupBy(sql4`EXTRACT(MONTH FROM ${campingSales.dateTime})`).orderBy(sql4`EXTRACT(MONTH FROM ${campingSales.dateTime})`);
+    ).groupBy(sql5`EXTRACT(MONTH FROM ${campingSales.dateTime})`).orderBy(sql5`EXTRACT(MONTH FROM ${campingSales.dateTime})`);
     const monthMap = /* @__PURE__ */ new Map();
     for (let i = 1; i <= 12; i++) {
       monthMap.set(i, {
@@ -1312,17 +1324,17 @@ var reportsRouter = createRouter({
   yearlyProfitLoss: authedQuery.query(async () => {
     const db = getDb();
     const salesRows = await db.select({
-      year: sql4`EXTRACT(YEAR FROM ${sales.dateTime})::int`,
-      total: sql4`COALESCE(SUM(${sales.totalAmount}), 0)::float`
-    }).from(sales).groupBy(sql4`EXTRACT(YEAR FROM ${sales.dateTime})`).orderBy(sql4`EXTRACT(YEAR FROM ${sales.dateTime})`);
+      year: sql5`EXTRACT(YEAR FROM ${sales.dateTime})::int`,
+      total: sql5`COALESCE(SUM(${sales.totalAmount}), 0)::float`
+    }).from(sales).groupBy(sql5`EXTRACT(YEAR FROM ${sales.dateTime})`).orderBy(sql5`EXTRACT(YEAR FROM ${sales.dateTime})`);
     const expenseRows = await db.select({
-      year: sql4`EXTRACT(YEAR FROM ${expenses.dateTime})::int`,
-      total: sql4`COALESCE(SUM(${expenses.total}), 0)::float`
-    }).from(expenses).groupBy(sql4`EXTRACT(YEAR FROM ${expenses.dateTime})`).orderBy(sql4`EXTRACT(YEAR FROM ${expenses.dateTime})`);
+      year: sql5`EXTRACT(YEAR FROM ${expenses.dateTime})::int`,
+      total: sql5`COALESCE(SUM(${expenses.total}), 0)::float`
+    }).from(expenses).groupBy(sql5`EXTRACT(YEAR FROM ${expenses.dateTime})`).orderBy(sql5`EXTRACT(YEAR FROM ${expenses.dateTime})`);
     const campingRows = await db.select({
-      year: sql4`EXTRACT(YEAR FROM ${campingSales.dateTime})::int`,
-      total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
-    }).from(campingSales).groupBy(sql4`EXTRACT(YEAR FROM ${campingSales.dateTime})`).orderBy(sql4`EXTRACT(YEAR FROM ${campingSales.dateTime})`);
+      year: sql5`EXTRACT(YEAR FROM ${campingSales.dateTime})::int`,
+      total: sql5`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
+    }).from(campingSales).groupBy(sql5`EXTRACT(YEAR FROM ${campingSales.dateTime})`).orderBy(sql5`EXTRACT(YEAR FROM ${campingSales.dateTime})`);
     const yearMap = /* @__PURE__ */ new Map();
     for (const row of salesRows) {
       const y = yearMap.get(Number(row.year)) || {
@@ -1368,7 +1380,7 @@ var reportsRouter = createRouter({
       const fromDate = new Date(year, 0, 1);
       const toDate = new Date(year + 1, 0, 1);
       const [salesResult] = await db.select({
-        total: sql4`COALESCE(SUM(${sales.totalAmount}), 0)::float`
+        total: sql5`COALESCE(SUM(${sales.totalAmount}), 0)::float`
       }).from(sales).where(
         and4(
           gte4(sales.dateTime, fromDate),
@@ -1376,7 +1388,7 @@ var reportsRouter = createRouter({
         )
       );
       const [expenseResult] = await db.select({
-        total: sql4`COALESCE(SUM(${expenses.total}), 0)::float`
+        total: sql5`COALESCE(SUM(${expenses.total}), 0)::float`
       }).from(expenses).where(
         and4(
           gte4(expenses.dateTime, fromDate),
@@ -1384,7 +1396,7 @@ var reportsRouter = createRouter({
         )
       );
       const [campingResult] = await db.select({
-        total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
+        total: sql5`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
       }).from(campingSales).where(
         and4(
           gte4(campingSales.dateTime, fromDate),
@@ -1420,31 +1432,31 @@ var reportsRouter = createRouter({
     startOfWeek.setDate(today.getDate() - today.getDay());
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const [todaySales] = await db.select({
-      total: sql4`COALESCE(SUM(${sales.totalAmount}), 0)::float`
+      total: sql5`COALESCE(SUM(${sales.totalAmount}), 0)::float`
     }).from(sales).where(gte4(sales.dateTime, today));
     const [weekSales] = await db.select({
-      total: sql4`COALESCE(SUM(${sales.totalAmount}), 0)::float`
+      total: sql5`COALESCE(SUM(${sales.totalAmount}), 0)::float`
     }).from(sales).where(gte4(sales.dateTime, startOfWeek));
     const [monthSales] = await db.select({
-      total: sql4`COALESCE(SUM(${sales.totalAmount}), 0)::float`
+      total: sql5`COALESCE(SUM(${sales.totalAmount}), 0)::float`
     }).from(sales).where(gte4(sales.dateTime, startOfMonth));
     const [todayExpenses] = await db.select({
-      total: sql4`COALESCE(SUM(${expenses.total}), 0)::float`
+      total: sql5`COALESCE(SUM(${expenses.total}), 0)::float`
     }).from(expenses).where(gte4(expenses.dateTime, today));
     const [weekExpenses] = await db.select({
-      total: sql4`COALESCE(SUM(${expenses.total}), 0)::float`
+      total: sql5`COALESCE(SUM(${expenses.total}), 0)::float`
     }).from(expenses).where(gte4(expenses.dateTime, startOfWeek));
     const [monthExpenses] = await db.select({
-      total: sql4`COALESCE(SUM(${expenses.total}), 0)::float`
+      total: sql5`COALESCE(SUM(${expenses.total}), 0)::float`
     }).from(expenses).where(gte4(expenses.dateTime, startOfMonth));
     const [todayCamping] = await db.select({
-      total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
+      total: sql5`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
     }).from(campingSales).where(gte4(campingSales.dateTime, today));
     const [weekCamping] = await db.select({
-      total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
+      total: sql5`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
     }).from(campingSales).where(gte4(campingSales.dateTime, startOfWeek));
     const [monthCamping] = await db.select({
-      total: sql4`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
+      total: sql5`COALESCE(SUM(${campingSales.totalAmount}), 0)::float`
     }).from(campingSales).where(gte4(campingSales.dateTime, startOfMonth));
     return {
       today: {
@@ -1481,7 +1493,7 @@ var reportsRouter = createRouter({
 });
 
 // server/data-router.ts
-import { sql as sql5 } from "drizzle-orm";
+import { sql as sql6 } from "drizzle-orm";
 var TABLES = [
   { name: "users", table: users, dateFields: ["createdAt", "updatedAt", "lastSignInAt"] },
   { name: "menu_items", table: menuItems, dateFields: ["createdAt", "updatedAt"] },
@@ -1546,9 +1558,9 @@ var dataRouter = createRouter({
       }
       for (const { name } of TABLES) {
         await db.execute(
-          sql5`SELECT setval(
+          sql6`SELECT setval(
                   pg_get_serial_sequence(${name}, 'id'),
-                  GREATEST((SELECT COALESCE(MAX(id), 0) FROM ${sql5.identifier(name)}), 1)
+                  GREATEST((SELECT COALESCE(MAX(id), 0) FROM ${sql6.identifier(name)}), 1)
                 )`
         );
       }
@@ -1569,11 +1581,11 @@ var dataRouter = createRouter({
       const db = getDb();
       let totalRows = 0;
       for (const { table } of TABLES) {
-        const [row] = await db.select({ count: sql5`COUNT(*)::int` }).from(table);
+        const [row] = await db.select({ count: sql6`COUNT(*)::int` }).from(table);
         totalRows += Number(row?.count ?? 0);
       }
       const sizeResult = await db.execute(
-        sql5`SELECT pg_size_pretty(pg_database_size(current_database())) AS size`
+        sql6`SELECT pg_size_pretty(pg_database_size(current_database())) AS size`
       );
       const sizeRows = Array.isArray(sizeResult) ? sizeResult : sizeResult.rows;
       const totalSize = sizeRows?.[0]?.size ?? "Unknown";
