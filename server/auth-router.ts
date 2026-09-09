@@ -15,19 +15,25 @@ export const authRouter = createRouter({
     .input(loginSchema)
     .mutation(async ({ input }) => {
       const { email, password } = input;
-      
-      // Create users on first login attempt
-      await createOrGetOwner();
-      await createOrGetManager();
-      
-      const user = await findUserByEmail(email);
+
+      let user = await findUserByEmail(email);
+
+      // Bootstrap the owner + manager accounts only on the very first login,
+      // when the accounts don't exist yet. Skipping this on every login keeps
+      // the hot path to a single query (matters on a cold Neon start).
+      if (!user) {
+        await createOrGetOwner();
+        await createOrGetManager();
+        user = await findUserByEmail(email);
+      }
+
       if (!user) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "Invalid email or password",
         });
       }
-      
+
       const isValidPassword = await verifyPassword(password, user.passwordHash);
       if (!isValidPassword) {
         throw new TRPCError({

@@ -76,31 +76,31 @@ export const dataRouter = createRouter({
 
         const db = getDb();
 
-        await db.transaction(async (tx) => {
-          // Delete children first
-          for (const { table } of [...TABLES].reverse()) {
-            await tx.delete(table);
-          }
+        // neon-http has no interactive transactions; run sequentially. This
+        // is an admin-only, destructive restore (truncate then load).
+        // Delete children first
+        for (const { table } of [...TABLES].reverse()) {
+          await db.delete(table);
+        }
 
-          // Insert parents first
-          for (const { name, table, dateFields } of TABLES) {
-            const rows: Record<string, unknown>[] = parsed.tables[name] ?? [];
-            if (rows.length === 0) continue;
-            const revived = rows.map((r) => reviveDates(r, dateFields));
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await tx.insert(table).values(revived as any);
-          }
+        // Insert parents first
+        for (const { name, table, dateFields } of TABLES) {
+          const rows: Record<string, unknown>[] = parsed.tables[name] ?? [];
+          if (rows.length === 0) continue;
+          const revived = rows.map((r) => reviveDates(r, dateFields));
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await db.insert(table).values(revived as any);
+        }
 
-          // Re-sync serial sequences to the max id in each table
-          for (const { name } of TABLES) {
-            await tx.execute(
-              sql`SELECT setval(
-                    pg_get_serial_sequence(${name}, 'id'),
-                    GREATEST((SELECT COALESCE(MAX(id), 0) FROM ${sql.identifier(name)}), 1)
-                  )`
-            );
-          }
-        });
+        // Re-sync serial sequences to the max id in each table
+        for (const { name } of TABLES) {
+          await db.execute(
+            sql`SELECT setval(
+                  pg_get_serial_sequence(${name}, 'id'),
+                  GREATEST((SELECT COALESCE(MAX(id), 0) FROM ${sql.identifier(name)}), 1)
+                )`
+          );
+        }
 
         return {
           success: true as const,

@@ -1,28 +1,19 @@
 // server/queries/connection.ts
-import { drizzle } from "drizzle-orm/neon-serverless";
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import ws from "ws";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 import { env } from "../lib/env";
 import * as schema from "../../db/schema";
 
-// Neon's serverless driver talks over WebSockets; Node (Vercel functions,
-// local dev) needs a WebSocket implementation supplied.
-neonConfig.webSocketConstructor = ws;
-
-let pool: Pool | undefined;
 let instance: ReturnType<typeof drizzle<typeof schema>> | undefined;
 
 export function getDb() {
   if (!instance) {
-    pool = new Pool({
-      connectionString: env.databaseUrl,
-      max: 1,
-      // A suspended Neon compute resumes on the first connection. Give it
-      // room to wake instead of throwing a "can't reach database" error.
-      connectionTimeoutMillis: 30_000,
-      idleTimeoutMillis: 20_000,
-    });
-    instance = drizzle(pool, { schema });
+    // HTTP (fetch) driver: no WebSocket, no connection pool. Each query is a
+    // single HTTPS request to Neon's SQL endpoint, which holds the request
+    // briefly while a suspended compute resumes. This is the robust choice
+    // for serverless (and for cross-region function <-> DB).
+    const sql = neon(env.databaseUrl);
+    instance = drizzle(sql, { schema });
   }
   return instance;
 }
@@ -42,6 +33,8 @@ const CONNECT_PHASE_ERRORS = [
   "timeout expired",
   "the database system is starting up",
   "fetch failed",
+  "failed to fetch",
+  "und_err",
 ];
 
 const IN_FLIGHT_ERRORS = [
@@ -54,6 +47,7 @@ const IN_FLIGHT_ERRORS = [
   "connection ended unexpectedly",
   "socket hang up",
   "client has encountered a connection error",
+  "terminated",
 ];
 
 function matches(err: unknown, patterns: string[]): boolean {

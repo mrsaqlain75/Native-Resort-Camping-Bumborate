@@ -78,7 +78,6 @@
     "tailwind-merge": "^3.6.0",
     "vaul": "^1.1.2",
     "vite": "^8.0.10",
-    "ws": "^8.18.0",
     "xlsx": "^0.18.5",
     "zod": "^4.4.2"
   },
@@ -91,7 +90,6 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@types/react-router-dom": "^5.3.3",
-    "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.23",
     "concurrently": "^9.2.1",

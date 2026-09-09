@@ -2,8 +2,8 @@
 import { z } from "zod";
 import dotenv from "dotenv";
 
-// Load .env file (no-op on platforms that inject env vars directly)
-dotenv.config();
+// Load .env for local dev; a no-op on platforms that inject env vars directly.
+dotenv.config({ quiet: true });
 
 const envSchema = z.object({
   // Pooled connection string (runtime). On Neon this is the "-pooler" host.

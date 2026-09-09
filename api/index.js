@@ -34,14 +34,13 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 
 // server/queries/connection.ts
-import { drizzle } from "drizzle-orm/neon-serverless";
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import ws from "ws";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 
 // server/lib/env.ts
 import { z } from "zod";
 import dotenv from "dotenv";
-dotenv.config();
+dotenv.config({ quiet: true });
 var envSchema = z.object({
   // Pooled connection string (runtime). On Neon this is the "-pooler" host.
   databaseUrl: z.string(),
@@ -201,20 +200,11 @@ var campingSales = pgTable("camping_sales", {
 });
 
 // server/queries/connection.ts
-neonConfig.webSocketConstructor = ws;
-var pool;
 var instance;
 function getDb() {
   if (!instance) {
-    pool = new Pool({
-      connectionString: env.databaseUrl,
-      max: 1,
-      // A suspended Neon compute resumes on the first connection. Give it
-      // room to wake instead of throwing a "can't reach database" error.
-      connectionTimeoutMillis: 3e4,
-      idleTimeoutMillis: 2e4
-    });
-    instance = drizzle(pool, { schema: schema_exports });
+    const sql6 = neon(env.databaseUrl);
+    instance = drizzle(sql6, { schema: schema_exports });
   }
   return instance;
 }
@@ -226,7 +216,9 @@ var CONNECT_PHASE_ERRORS = [
   "connection timeout",
   "timeout expired",
   "the database system is starting up",
-  "fetch failed"
+  "fetch failed",
+  "failed to fetch",
+  "und_err"
 ];
 var IN_FLIGHT_ERRORS = [
   "econnreset",
@@ -237,7 +229,8 @@ var IN_FLIGHT_ERRORS = [
   "server closed the connection",
   "connection ended unexpectedly",
   "socket hang up",
-  "client has encountered a connection error"
+  "client has encountered a connection error",
+  "terminated"
 ];
 function matches(err, patterns) {
   let cur = err;
@@ -402,9 +395,12 @@ var loginSchema = z2.object({
 var authRouter = createRouter({
   login: publicQuery.input(loginSchema).mutation(async ({ input }) => {
     const { email, password } = input;
-    await createOrGetOwner();
-    await createOrGetManager();
-    const user = await findUserByEmail(email);
+    let user = await findUserByEmail(email);
+    if (!user) {
+      await createOrGetOwner();
+      await createOrGetManager();
+      user = await findUserByEmail(email);
+    }
     if (!user) {
       throw new TRPCError2({
         code: "UNAUTHORIZED",
@@ -798,27 +794,22 @@ var expensesRouter = createRouter({
     })
   ).mutation(async ({ input, ctx }) => {
     const db = getDb();
-    const ids = await db.transaction(async (tx) => {
-      const inserted = [];
-      for (const expense of input.expenses) {
-        const [row] = await tx.insert(expenses).values({
-          name: expense.name,
-          amount: expense.amount.toString(),
-          quantity: expense.quantity || 0,
-          total: expense.total.toString(),
-          category: expense.category,
-          paymentMethod: expense.paymentMethod,
-          paidTo: expense.paidTo || null,
-          receiptUrl: expense.receiptUrl || null,
-          dateTime: new Date(expense.dateTime),
-          note: expense.note || null,
-          createdBy: ctx.user.id
-        }).returning({ id: expenses.id });
-        inserted.push(row.id);
-      }
-      return inserted;
-    });
-    return { success: true, count: ids.length };
+    const rows = await db.insert(expenses).values(
+      input.expenses.map((expense) => ({
+        name: expense.name,
+        amount: expense.amount.toString(),
+        quantity: expense.quantity || 0,
+        total: expense.total.toString(),
+        category: expense.category,
+        paymentMethod: expense.paymentMethod,
+        paidTo: expense.paidTo || null,
+        receiptUrl: expense.receiptUrl || null,
+        dateTime: new Date(expense.dateTime),
+        note: expense.note || null,
+        createdBy: ctx.user.id
+      }))
+    ).returning({ id: expenses.id });
+    return { success: true, count: rows.length };
   }),
   update: authedQuery.input(
     z5.object({
@@ -1514,25 +1505,23 @@ var dataRouter = createRouter({
         return { success: false, error: "Invalid backup file" };
       }
       const db = getDb();
-      await db.transaction(async (tx) => {
-        for (const { table } of [...TABLES].reverse()) {
-          await tx.delete(table);
-        }
-        for (const { name, table, dateFields } of TABLES) {
-          const rows = parsed2.tables[name] ?? [];
-          if (rows.length === 0) continue;
-          const revived = rows.map((r) => reviveDates(r, dateFields));
-          await tx.insert(table).values(revived);
-        }
-        for (const { name } of TABLES) {
-          await tx.execute(
-            sql5`SELECT setval(
-                    pg_get_serial_sequence(${name}, 'id'),
-                    GREATEST((SELECT COALESCE(MAX(id), 0) FROM ${sql5.identifier(name)}), 1)
-                  )`
-          );
-        }
-      });
+      for (const { table } of [...TABLES].reverse()) {
+        await db.delete(table);
+      }
+      for (const { name, table, dateFields } of TABLES) {
+        const rows = parsed2.tables[name] ?? [];
+        if (rows.length === 0) continue;
+        const revived = rows.map((r) => reviveDates(r, dateFields));
+        await db.insert(table).values(revived);
+      }
+      for (const { name } of TABLES) {
+        await db.execute(
+          sql5`SELECT setval(
+                  pg_get_serial_sequence(${name}, 'id'),
+                  GREATEST((SELECT COALESCE(MAX(id), 0) FROM ${sql5.identifier(name)}), 1)
+                )`
+        );
+      }
       return {
         success: true,
         message: "Database restored successfully"

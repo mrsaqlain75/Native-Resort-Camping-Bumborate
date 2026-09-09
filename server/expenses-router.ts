@@ -108,31 +108,28 @@ export const expensesRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
 
-      const ids = await db.transaction(async (tx) => {
-        const inserted: number[] = [];
-        for (const expense of input.expenses) {
-          const [row] = await tx
-            .insert(schema.expenses)
-            .values({
-              name: expense.name,
-              amount: expense.amount.toString(),
-              quantity: expense.quantity || 0,
-              total: expense.total.toString(),
-              category: expense.category,
-              paymentMethod: expense.paymentMethod,
-              paidTo: expense.paidTo || null,
-              receiptUrl: expense.receiptUrl || null,
-              dateTime: new Date(expense.dateTime),
-              note: expense.note || null,
-              createdBy: ctx.user.id,
-            })
-            .returning({ id: schema.expenses.id });
-          inserted.push(row.id);
-        }
-        return inserted;
-      });
+      // One multi-row INSERT — atomic on its own, no explicit transaction
+      // needed (and neon-http has no interactive transactions).
+      const rows = await db
+        .insert(schema.expenses)
+        .values(
+          input.expenses.map((expense) => ({
+            name: expense.name,
+            amount: expense.amount.toString(),
+            quantity: expense.quantity || 0,
+            total: expense.total.toString(),
+            category: expense.category,
+            paymentMethod: expense.paymentMethod,
+            paidTo: expense.paidTo || null,
+            receiptUrl: expense.receiptUrl || null,
+            dateTime: new Date(expense.dateTime),
+            note: expense.note || null,
+            createdBy: ctx.user.id,
+          }))
+        )
+        .returning({ id: schema.expenses.id });
 
-      return { success: true, count: ids.length };
+      return { success: true, count: rows.length };
     }),
 
   update: authedQuery
