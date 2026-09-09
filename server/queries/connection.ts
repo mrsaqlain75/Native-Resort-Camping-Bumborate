@@ -31,6 +31,11 @@ export function getDb() {
       ssl: "require",
       idle_timeout: 20,
       connect_timeout: 15,
+      // Server-side guards so a stuck query becomes a fast error, never a hang.
+      connection: {
+        statement_timeout: 12_000,
+        idle_in_transaction_session_timeout: 12_000,
+      },
     });
     instance = drizzle(client, { schema });
   }

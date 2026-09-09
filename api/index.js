@@ -1,85 +1,62 @@
 import { createRequire } from 'module'; const require = createRequire(import.meta.url);
 var __defProp = Object.defineProperty;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// server/vercel-entry.ts
-import { getRequestListener } from "@hono/node-server";
-
-// server/app.ts
-import { Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
-import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-
-// server/auth-router.ts
-import { TRPCError as TRPCError2 } from "@trpc/server";
-import { z as z2 } from "zod";
-
-// contracts/constants.ts
-var Session = {
-  cookieName: "auth_token",
-  maxAgeMs: 7 * 24 * 60 * 60 * 1e3
-  // 7 days
-};
-var ErrorMessages = {
-  unauthenticated: "Authentication required",
-  insufficientRole: "Insufficient permissions",
-  invalidCredentials: "Invalid email or password"
-};
-
-// server/middleware.ts
-import { initTRPC, TRPCError } from "@trpc/server";
-import superjson from "superjson";
-
-// server/queries/connection.ts
-import postgres from "postgres";
-import { drizzle } from "drizzle-orm/postgres-js";
-import { sql } from "drizzle-orm";
-
 // server/lib/env.ts
 import { z } from "zod";
 import dotenv from "dotenv";
-dotenv.config({ quiet: true });
-var envSchema = z.object({
-  // Pooled connection string (runtime). On Neon this is the "-pooler" host.
-  databaseUrl: z.string(),
-  // Direct connection string (migrations / drizzle-kit push). Falls back to
-  // databaseUrl when not provided.
-  directUrl: z.string(),
-  jwtSecret: z.string(),
-  jwtExpiresIn: z.string().default("7d"),
-  nodeEnv: z.string().default("development"),
-  ownerEmail: z.string().email(),
-  ownerPassword: z.string(),
-  managerEmail: z.string().email().optional(),
-  managerPassword: z.string().optional(),
-  // Cloudinary (server-side signed uploads). Optional: receipt upload is
-  // disabled gracefully when these are absent.
-  cloudinaryCloudName: z.string().optional(),
-  cloudinaryApiKey: z.string().optional(),
-  cloudinaryApiSecret: z.string().optional()
+var envSchema, parsed, env;
+var init_env = __esm({
+  "server/lib/env.ts"() {
+    "use strict";
+    dotenv.config({ quiet: true });
+    envSchema = z.object({
+      // Pooled connection string (runtime). On Neon this is the "-pooler" host.
+      databaseUrl: z.string(),
+      // Direct connection string (migrations / drizzle-kit push). Falls back to
+      // databaseUrl when not provided.
+      directUrl: z.string(),
+      jwtSecret: z.string(),
+      jwtExpiresIn: z.string().default("7d"),
+      nodeEnv: z.string().default("development"),
+      ownerEmail: z.string().email(),
+      ownerPassword: z.string(),
+      managerEmail: z.string().email().optional(),
+      managerPassword: z.string().optional(),
+      // Cloudinary (server-side signed uploads). Optional: receipt upload is
+      // disabled gracefully when these are absent.
+      cloudinaryCloudName: z.string().optional(),
+      cloudinaryApiKey: z.string().optional(),
+      cloudinaryApiSecret: z.string().optional()
+    });
+    parsed = envSchema.safeParse({
+      databaseUrl: process.env.DATABASE_URL,
+      directUrl: process.env.DIRECT_URL || process.env.DATABASE_URL,
+      jwtSecret: process.env.JWT_SECRET,
+      jwtExpiresIn: process.env.JWT_EXPIRES_IN,
+      nodeEnv: process.env.NODE_ENV,
+      ownerEmail: process.env.OWNER_EMAIL,
+      ownerPassword: process.env.OWNER_PASSWORD,
+      managerEmail: process.env.MANAGER_EMAIL,
+      managerPassword: process.env.MANAGER_PASSWORD,
+      cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
+      cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET
+    });
+    if (!parsed.success) {
+      const fields = parsed.error.issues.map((i) => i.path.join(".") || "(root)").join(", ");
+      throw new Error(`Invalid or missing environment variables: ${fields}`);
+    }
+    env = parsed.data;
+  }
 });
-var parsed = envSchema.safeParse({
-  databaseUrl: process.env.DATABASE_URL,
-  directUrl: process.env.DIRECT_URL || process.env.DATABASE_URL,
-  jwtSecret: process.env.JWT_SECRET,
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN,
-  nodeEnv: process.env.NODE_ENV,
-  ownerEmail: process.env.OWNER_EMAIL,
-  ownerPassword: process.env.OWNER_PASSWORD,
-  managerEmail: process.env.MANAGER_EMAIL,
-  managerPassword: process.env.MANAGER_PASSWORD,
-  cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
-  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
-  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET
-});
-if (!parsed.success) {
-  const fields = parsed.error.issues.map((i) => i.path.join(".") || "(root)").join(", ");
-  throw new Error(`Invalid or missing environment variables: ${fields}`);
-}
-var env = parsed.data;
 
 // db/schema.ts
 var schema_exports = {};
@@ -108,99 +85,116 @@ import {
   jsonb,
   date
 } from "drizzle-orm/pg-core";
-var userRoleEnum = pgEnum("user_role", ["user", "admin", "manager"]);
-var activeEnum = pgEnum("active_flag", ["yes", "no"]);
-var paymentMethodEnum = pgEnum("payment_method", ["cash", "e_transaction"]);
-var expensePaymentMethodEnum = pgEnum("expense_payment_method", [
-  "cash",
-  "e_transaction",
-  "bank_transfer"
-]);
-var salesSourceEnum = pgEnum("sales_source", ["dine_in", "online_order", "other"]);
-var expenseCategoryEnum = pgEnum("expense_category", [
-  "food",
-  "supplies",
-  "utilities",
-  "staff",
-  "maintenance",
-  "rent",
-  "other"
-]);
-var users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  email: varchar("email", { length: 320 }).notNull().unique(),
-  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
-  name: varchar("name", { length: 255 }),
-  avatar: text("avatar"),
-  role: userRoleEnum("role").default("user").notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull().$onUpdate(() => /* @__PURE__ */ new Date()),
-  lastSignInAt: timestamp("last_sign_in_at", { mode: "date" }).defaultNow().notNull()
-});
-var menuItems = pgTable("menu_items", {
-  id: serial("id").primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  category: varchar("category", { length: 100 }).notNull(),
-  price: numeric("price", { precision: 12, scale: 2 }).notNull(),
-  stockCount: integer("stock_count").default(0),
-  active: activeEnum("active").default("yes").notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull().$onUpdate(() => /* @__PURE__ */ new Date())
-});
-var sales = pgTable("sales", {
-  id: serial("id").primaryKey(),
-  customerName: varchar("customer_name", { length: 255 }).default("Walk-in Customer"),
-  items: jsonb("items").$type().notNull(),
-  totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
-  discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).default("0"),
-  taxPercent: numeric("tax_percent", { precision: 5, scale: 2 }).default("0"),
-  paymentMethod: paymentMethodEnum("payment_method").notNull(),
-  source: salesSourceEnum("source").notNull(),
-  dateTime: timestamp("date_time", { mode: "date" }).notNull(),
-  note: text("note"),
-  createdBy: integer("created_by").notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull()
-});
-var expenses = pgTable("expenses", {
-  id: serial("id").primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
-  // Unit price
-  quantity: integer("quantity").default(0),
-  // Quantity
-  total: numeric("total", { precision: 12, scale: 2 }).default("0"),
-  // Total = amount × quantity
-  category: expenseCategoryEnum("category").notNull(),
-  paymentMethod: expensePaymentMethodEnum("payment_method").notNull(),
-  paidTo: varchar("paid_to", { length: 255 }),
-  receiptUrl: text("receipt_url"),
-  dateTime: timestamp("date_time", { mode: "date" }).notNull(),
-  note: text("note"),
-  createdBy: integer("created_by").notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull()
-});
-var campingSales = pgTable("camping_sales", {
-  id: serial("id").primaryKey(),
-  customerName: varchar("customer_name", { length: 255 }).notNull(),
-  numberOfCamps: integer("number_of_camps").notNull().default(1),
-  checkIn: date("check_in", { mode: "date" }).notNull(),
-  checkOut: date("check_out", { mode: "date" }).notNull(),
-  peopleCount: integer("people_count").notNull(),
-  services: jsonb("services").$type().notNull(),
-  nights: integer("nights").notNull(),
-  spotTotal: numeric("spot_total", { precision: 12, scale: 2 }).notNull(),
-  servicesTotal: numeric("services_total", { precision: 12, scale: 2 }).default("0.00").notNull(),
-  totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
-  discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).default("0"),
-  taxPercent: numeric("tax_percent", { precision: 5, scale: 2 }).default("0"),
-  paymentMethod: paymentMethodEnum("payment_method").notNull(),
-  dateTime: timestamp("date_time", { mode: "date" }).notNull(),
-  note: text("note"),
-  createdBy: integer("created_by").notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull()
+var userRoleEnum, activeEnum, paymentMethodEnum, expensePaymentMethodEnum, salesSourceEnum, expenseCategoryEnum, users, menuItems, sales, expenses, campingSales;
+var init_schema = __esm({
+  "db/schema.ts"() {
+    "use strict";
+    userRoleEnum = pgEnum("user_role", ["user", "admin", "manager"]);
+    activeEnum = pgEnum("active_flag", ["yes", "no"]);
+    paymentMethodEnum = pgEnum("payment_method", ["cash", "e_transaction"]);
+    expensePaymentMethodEnum = pgEnum("expense_payment_method", [
+      "cash",
+      "e_transaction",
+      "bank_transfer"
+    ]);
+    salesSourceEnum = pgEnum("sales_source", ["dine_in", "online_order", "other"]);
+    expenseCategoryEnum = pgEnum("expense_category", [
+      "food",
+      "supplies",
+      "utilities",
+      "staff",
+      "maintenance",
+      "rent",
+      "other"
+    ]);
+    users = pgTable("users", {
+      id: serial("id").primaryKey(),
+      email: varchar("email", { length: 320 }).notNull().unique(),
+      passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+      name: varchar("name", { length: 255 }),
+      avatar: text("avatar"),
+      role: userRoleEnum("role").default("user").notNull(),
+      createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+      updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull().$onUpdate(() => /* @__PURE__ */ new Date()),
+      lastSignInAt: timestamp("last_sign_in_at", { mode: "date" }).defaultNow().notNull()
+    });
+    menuItems = pgTable("menu_items", {
+      id: serial("id").primaryKey(),
+      name: varchar("name", { length: 255 }).notNull(),
+      category: varchar("category", { length: 100 }).notNull(),
+      price: numeric("price", { precision: 12, scale: 2 }).notNull(),
+      stockCount: integer("stock_count").default(0),
+      active: activeEnum("active").default("yes").notNull(),
+      createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+      updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull().$onUpdate(() => /* @__PURE__ */ new Date())
+    });
+    sales = pgTable("sales", {
+      id: serial("id").primaryKey(),
+      customerName: varchar("customer_name", { length: 255 }).default("Walk-in Customer"),
+      items: jsonb("items").$type().notNull(),
+      totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
+      discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).default("0"),
+      taxPercent: numeric("tax_percent", { precision: 5, scale: 2 }).default("0"),
+      paymentMethod: paymentMethodEnum("payment_method").notNull(),
+      source: salesSourceEnum("source").notNull(),
+      dateTime: timestamp("date_time", { mode: "date" }).notNull(),
+      note: text("note"),
+      createdBy: integer("created_by").notNull(),
+      createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull()
+    });
+    expenses = pgTable("expenses", {
+      id: serial("id").primaryKey(),
+      name: varchar("name", { length: 255 }).notNull(),
+      amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+      // Unit price
+      quantity: integer("quantity").default(0),
+      // Quantity
+      total: numeric("total", { precision: 12, scale: 2 }).default("0"),
+      // Total = amount × quantity
+      category: expenseCategoryEnum("category").notNull(),
+      paymentMethod: expensePaymentMethodEnum("payment_method").notNull(),
+      paidTo: varchar("paid_to", { length: 255 }),
+      receiptUrl: text("receipt_url"),
+      dateTime: timestamp("date_time", { mode: "date" }).notNull(),
+      note: text("note"),
+      createdBy: integer("created_by").notNull(),
+      createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull()
+    });
+    campingSales = pgTable("camping_sales", {
+      id: serial("id").primaryKey(),
+      customerName: varchar("customer_name", { length: 255 }).notNull(),
+      numberOfCamps: integer("number_of_camps").notNull().default(1),
+      checkIn: date("check_in", { mode: "date" }).notNull(),
+      checkOut: date("check_out", { mode: "date" }).notNull(),
+      peopleCount: integer("people_count").notNull(),
+      services: jsonb("services").$type().notNull(),
+      nights: integer("nights").notNull(),
+      spotTotal: numeric("spot_total", { precision: 12, scale: 2 }).notNull(),
+      servicesTotal: numeric("services_total", { precision: 12, scale: 2 }).default("0.00").notNull(),
+      totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
+      discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).default("0"),
+      taxPercent: numeric("tax_percent", { precision: 5, scale: 2 }).default("0"),
+      paymentMethod: paymentMethodEnum("payment_method").notNull(),
+      dateTime: timestamp("date_time", { mode: "date" }).notNull(),
+      note: text("note"),
+      createdBy: integer("created_by").notNull(),
+      createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull()
+    });
+  }
 });
 
 // server/queries/connection.ts
+var connection_exports = {};
+__export(connection_exports, {
+  dbPing: () => dbPing,
+  getDb: () => getDb,
+  isConnectPhaseError: () => isConnectPhaseError,
+  isTransientDbError: () => isTransientDbError,
+  withDbRetry: () => withDbRetry
+});
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { sql } from "drizzle-orm";
 function cleanUrl(raw) {
   try {
     const u = new URL(raw);
@@ -212,8 +206,6 @@ function cleanUrl(raw) {
     return raw;
   }
 }
-var client;
-var instance;
 function getDb() {
   if (!instance) {
     client = postgres(cleanUrl(env.databaseUrl), {
@@ -221,7 +213,12 @@ function getDb() {
       prepare: false,
       ssl: "require",
       idle_timeout: 20,
-      connect_timeout: 15
+      connect_timeout: 15,
+      // Server-side guards so a stuck query becomes a fast error, never a hang.
+      connection: {
+        statement_timeout: 12e3,
+        idle_in_transaction_session_timeout: 12e3
+      }
     });
     instance = drizzle(client, { schema: schema_exports });
   }
@@ -244,36 +241,6 @@ async function dbPing() {
     };
   }
 }
-var CONNECT_PHASE_ERRORS = [
-  "econnrefused",
-  "enotfound",
-  "getaddrinfo",
-  "connect_timeout",
-  "connection timeout",
-  "timeout expired",
-  "the database system is starting up",
-  "fetch failed",
-  "failed to fetch",
-  "und_err",
-  "timeouterror",
-  "aborted",
-  "the operation was aborted",
-  "connect timeout",
-  "write connect_timeout"
-];
-var IN_FLIGHT_ERRORS = [
-  "econnreset",
-  "epipe",
-  "connection terminated",
-  "connection closed",
-  "terminating connection",
-  "server closed the connection",
-  "connection ended unexpectedly",
-  "socket hang up",
-  "client has encountered a connection error",
-  "terminated",
-  "cannot use a pool after calling end"
-];
 function matches(err, patterns) {
   let cur = err;
   for (let depth = 0; depth < 5 && cur; depth++) {
@@ -303,8 +270,73 @@ async function withDbRetry(fn) {
   }
   throw lastErr;
 }
+var client, instance, CONNECT_PHASE_ERRORS, IN_FLIGHT_ERRORS;
+var init_connection = __esm({
+  "server/queries/connection.ts"() {
+    "use strict";
+    init_env();
+    init_schema();
+    CONNECT_PHASE_ERRORS = [
+      "econnrefused",
+      "enotfound",
+      "getaddrinfo",
+      "connect_timeout",
+      "connection timeout",
+      "timeout expired",
+      "the database system is starting up",
+      "fetch failed",
+      "failed to fetch",
+      "und_err",
+      "timeouterror",
+      "aborted",
+      "the operation was aborted",
+      "connect timeout",
+      "write connect_timeout"
+    ];
+    IN_FLIGHT_ERRORS = [
+      "econnreset",
+      "epipe",
+      "connection terminated",
+      "connection closed",
+      "terminating connection",
+      "server closed the connection",
+      "connection ended unexpectedly",
+      "socket hang up",
+      "client has encountered a connection error",
+      "terminated",
+      "cannot use a pool after calling end"
+    ];
+  }
+});
+
+// server/vercel-entry.ts
+import { getRequestListener } from "@hono/node-server";
+
+// server/app.ts
+import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+
+// server/auth-router.ts
+import { TRPCError as TRPCError2 } from "@trpc/server";
+import { z as z2 } from "zod";
+
+// contracts/constants.ts
+var Session = {
+  cookieName: "auth_token",
+  maxAgeMs: 7 * 24 * 60 * 60 * 1e3
+  // 7 days
+};
+var ErrorMessages = {
+  unauthenticated: "Authentication required",
+  insufficientRole: "Insufficient permissions",
+  invalidCredentials: "Invalid email or password"
+};
 
 // server/middleware.ts
+init_connection();
+import { initTRPC, TRPCError } from "@trpc/server";
+import superjson from "superjson";
 var t = initTRPC.context().create({
   transformer: superjson
 });
@@ -356,9 +388,13 @@ var adminQuery = authedQuery.use(requireRole("admin"));
 var managerQuery = authedQuery.use(requireRole(["admin", "manager"]));
 
 // server/queries/users.ts
+init_schema();
+init_connection();
+init_env();
 import { eq } from "drizzle-orm";
 
 // server/lib/auth.ts
+init_env();
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 var SALT_ROUNDS = 10;
@@ -490,6 +526,8 @@ var authRouter = createRouter({
 
 // server/menu-router.ts
 import { z as z3 } from "zod";
+init_connection();
+init_schema();
 import { eq as eq2, desc } from "drizzle-orm";
 var menuRouter = createRouter({
   list: authedQuery.query(async () => {
@@ -558,6 +596,8 @@ var menuRouter = createRouter({
 
 // server/sales-router.ts
 import { z as z4 } from "zod";
+init_connection();
+init_schema();
 import { eq as eq3, desc as desc2, gte, lte, and, sql as sql2 } from "drizzle-orm";
 var salesRouter = createRouter({
   list: authedQuery.query(async () => {
@@ -751,6 +791,8 @@ var salesRouter = createRouter({
 
 // server/expenses-router.ts
 import { z as z5 } from "zod";
+init_connection();
+init_schema();
 import { eq as eq4, desc as desc3, gte as gte2, lte as lte2, and as and2, sql as sql3 } from "drizzle-orm";
 var expensesRouter = createRouter({
   list: authedQuery.query(async () => {
@@ -972,6 +1014,8 @@ var expensesRouter = createRouter({
 
 // server/camping-router.ts
 import { z as z6 } from "zod";
+init_connection();
+init_schema();
 import { eq as eq5, desc as desc4, gte as gte3, lte as lte3, and as and3, sql as sql4 } from "drizzle-orm";
 var campingRouter = createRouter({
   sales: {
@@ -1140,6 +1184,8 @@ var campingRouter = createRouter({
 
 // server/reports-router.ts
 import { z as z7 } from "zod";
+init_connection();
+init_schema();
 import { gte as gte4, lte as lte4, and as and4, desc as desc5, sql as sql5 } from "drizzle-orm";
 var reportsRouter = createRouter({
   profitLoss: authedQuery.input(z7.object({ from: z7.string(), to: z7.string() })).query(async ({ input }) => {
@@ -1493,6 +1539,8 @@ var reportsRouter = createRouter({
 });
 
 // server/data-router.ts
+init_connection();
+init_schema();
 import { sql as sql6 } from "drizzle-orm";
 var TABLES = [
   { name: "users", table: users, dateFields: ["createdAt", "updatedAt", "lastSignInAt"] },
@@ -1608,6 +1656,7 @@ var dataRouter = createRouter({
 import { createHash } from "node:crypto";
 import { z as z8 } from "zod";
 import { TRPCError as TRPCError3 } from "@trpc/server";
+init_env();
 var cloudinaryRouter = createRouter({
   signUpload: authedQuery.input(
     z8.object({
@@ -1647,6 +1696,7 @@ var appRouter = createRouter({
 });
 
 // server/lib/jwt-auth.ts
+init_connection();
 async function authenticateRequest(headers) {
   const token = getTokenFromHeaders(headers);
   if (!token) return null;
@@ -1667,19 +1717,69 @@ async function createContext(opts) {
 }
 
 // server/app.ts
+init_env();
 var app = new Hono();
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.get("/health", (c) => c.json({ status: "ok" }));
 app.get("/api/health", (c) => c.json({ status: "ok" }));
 app.get("/api/dbcheck", async (c) => {
-  const which = env.directUrl || env.databaseUrl;
   let host = "unknown";
   try {
-    host = new URL(which).host;
+    host = new URL(env.databaseUrl).host;
   } catch {
   }
-  const result = await dbPing();
-  return c.json({ host, ...result });
+  const { getDb: getDb2 } = await Promise.resolve().then(() => (init_connection(), connection_exports));
+  const { sql: sql7 } = await import("drizzle-orm");
+  const schema = await Promise.resolve().then(() => (init_schema(), schema_exports));
+  const { eq: eq6 } = await import("drizzle-orm");
+  const bcrypt2 = (await import("bcryptjs")).default;
+  const steps = [];
+  const run = async (label, fn) => {
+    const t2 = Date.now();
+    try {
+      const r = await Promise.race([
+        fn(),
+        new Promise(
+          (_, rej) => setTimeout(() => rej(new Error("step exceeded 6s")), 6e3)
+        )
+      ]);
+      steps.push({
+        label,
+        ok: true,
+        ms: Date.now() - t2,
+        sample: JSON.stringify(r).slice(0, 100)
+      });
+    } catch (err) {
+      steps.push({
+        label,
+        ok: false,
+        ms: Date.now() - t2,
+        err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+      });
+    }
+  };
+  const db = getDb2();
+  await run("raw: select 1", () => db.execute(sql7`select 1 as ok`));
+  await run("raw: select now()", () => db.execute(sql7`select now()`));
+  await run(
+    "raw: count users",
+    () => db.execute(sql7`select count(*)::int as n from users`)
+  );
+  await run(
+    "raw: users by email ($1)",
+    () => db.execute(
+      sql7`select id, email from users where email = ${"owner@nativeresort.com"} limit 1`
+    )
+  );
+  await run(
+    "drizzle: select users by email",
+    () => db.select().from(schema.users).where(eq6(schema.users.email, "owner@nativeresort.com")).limit(1)
+  );
+  await run(
+    "bcrypt.compare",
+    () => bcrypt2.compare("whatever", "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy")
+  );
+  return c.json({ host, steps });
 });
 app.use(
   "/api/trpc/*",
