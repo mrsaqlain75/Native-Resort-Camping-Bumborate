@@ -309,9 +309,6 @@ var init_connection = __esm({
   }
 });
 
-// server/vercel-entry.ts
-import { getRequestListener } from "@hono/node-server";
-
 // server/app.ts
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -1798,9 +1795,50 @@ var config = {
   runtime: "nodejs",
   maxDuration: 30
 };
-var listener = getRequestListener(app_default.fetch);
-function handler(req, res) {
-  return listener(req, res);
+async function readBody(req) {
+  if (req.method === "GET" || req.method === "HEAD") return void 0;
+  if (req.body != null) {
+    if (typeof req.body === "string") return req.body;
+    if (Buffer.isBuffer(req.body)) return req.body.toString("utf8");
+    return JSON.stringify(req.body);
+  }
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+  }
+  const raw = Buffer.concat(chunks).toString("utf8");
+  return raw.length ? raw : void 0;
+}
+async function handler(req, res) {
+  try {
+    const host = req.headers.host ?? "localhost";
+    const proto = (Array.isArray(req.headers["x-forwarded-proto"]) ? req.headers["x-forwarded-proto"][0] : req.headers["x-forwarded-proto"]) || "https";
+    const url = `${proto}://${host}${req.url ?? "/"}`;
+    const headers = new Headers();
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (Array.isArray(value)) value.forEach((v) => headers.append(key, v));
+      else if (value != null) headers.set(key, value);
+    }
+    const body = await readBody(req);
+    const response = await app_default.fetch(
+      new Request(url, { method: req.method ?? "GET", headers, body })
+    );
+    res.statusCode = response.status;
+    response.headers.forEach((value, key) => {
+      if (key.toLowerCase() !== "content-length") res.setHeader(key, value);
+    });
+    res.end(Buffer.from(await response.arrayBuffer()));
+  } catch (err) {
+    console.error("[api] handler error:", err);
+    res.statusCode = 500;
+    res.setHeader("content-type", "application/json");
+    res.end(
+      JSON.stringify({
+        error: "Handler error",
+        detail: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+      })
+    );
+  }
 }
 export {
   config,
