@@ -10,23 +10,30 @@ import { BarChart3, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 
 const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-4)", "var(--chart-5)", "var(--chart-4)", "var(--chart-5)"];
 
+const localDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const startOfCurrentMonth = () => {
+  const n = new Date();
+  return localDate(new Date(n.getFullYear(), n.getMonth(), 1));
+};
+const todayStr = () => localDate(new Date());
+
 export default function ProfitLoss() {
   const [period, setPeriod] = useState<"daily" | "monthly" | "yearly">("monthly");
-  const [from, setFrom] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 1);
-    return d.toISOString().split("T")[0];
-  });
-  const [to, setTo] = useState(() => new Date().toISOString().split("T")[0]);
-  const [submitted, setSubmitted] = useState(false);
+  const [from, setFrom] = useState(startOfCurrentMonth);
+  const [to, setTo] = useState(todayStr);
+  const [submitted, setSubmitted] = useState(true);
+
+  const fromParam = `${from}T00:00:00.000Z`;
+  const toParam = `${to}T23:59:59.999Z`;
 
   const { data: summary } = trpc.reports.profitLoss.useQuery(
-    { from: new Date(from).toISOString(), to: new Date(to).toISOString() },
+    { from: fromParam, to: toParam },
     { enabled: submitted }
   );
 
   const { data: dailyData } = trpc.reports.dailyProfitLoss.useQuery(
-    { from, to },
+    { from: fromParam, to: toParam },
     { enabled: submitted && period === "daily" }
   );
 

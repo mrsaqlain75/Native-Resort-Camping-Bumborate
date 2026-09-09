@@ -16,9 +16,7 @@ import {
   BarChart3,
   CalendarDays,
   CalendarRange,
-  TrendingUp,
   Award,
-  ArrowLeftRight,
   LayoutDashboard,
   List,
   Landmark,
@@ -45,15 +43,11 @@ const restaurantItems = [
 const reportItems = [
   { path: "/reports/today", label: "Today Report", icon: CalendarDays },
   { path: "/sales-expenses", label: "Sales & Expenses", icon: Receipt },
-  { path: "/reports/weekly", label: "Weekly Report", icon: CalendarRange },
-  { path: "/reports/monthly", label: "Monthly Report", icon: TrendingUp },
-  { path: "/reports/yearly", label: "Yearly Report", icon: BarChart3 },
-  { path: "/reports/range", label: "Date Range Report", icon: CalendarRange },
+  { path: "/reports", label: "Reports", icon: CalendarRange },
 ];
 
 const ownerReportItems = [
   { path: "/reports/rankings", label: "Selling Rankings", icon: Award },
-  { path: "/reports/comparison", label: "Year by Year", icon: ArrowLeftRight },
 ];
 
 const ownerAnalysisItems = [

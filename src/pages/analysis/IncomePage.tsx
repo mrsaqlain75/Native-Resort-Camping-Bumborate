@@ -17,23 +17,30 @@ function exportToExcel(data: unknown[], filename: string) {
   XLSX.writeFile(wb, filename);
 }
 
+const localDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const startOfCurrentMonth = () => {
+  const n = new Date();
+  return localDate(new Date(n.getFullYear(), n.getMonth(), 1));
+};
+const todayStr = () => localDate(new Date());
+
 export default function IncomePage() {
-  const [from, setFrom] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 1);
-    return d.toISOString().split("T")[0];
-  });
-  const [to, setTo] = useState(() => new Date().toISOString().split("T")[0]);
+  const [from, setFrom] = useState(startOfCurrentMonth);
+  const [to, setTo] = useState(todayStr);
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState(true);
+
+  const fromParam = `${from}T00:00:00.000Z`;
+  const toParam = `${to}T23:59:59.999Z`;
 
   const { data: sales } = trpc.sales.listByDateRange.useQuery(
-    { from: new Date(from).toISOString(), to: new Date(to).toISOString() },
+    { from: fromParam, to: toParam },
     { enabled: submitted }
   );
   const { data: camping } = trpc.camping.sales.listByDateRange.useQuery(
-    { from: new Date(from).toISOString(), to: new Date(to).toISOString() },
+    { from: fromParam, to: toParam },
     { enabled: submitted }
   );
 

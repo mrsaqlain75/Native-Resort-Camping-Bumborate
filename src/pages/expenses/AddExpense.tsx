@@ -279,7 +279,10 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               </div>
 
               {fields.map((field, index) => {
-                const itemTotal = watch(`items.${index}.total`) || 0;
+                const watchedItem = watchedItems[index] || {};
+                const itemTotal =
+                  (Number(watchedItem.unitPrice) || 0) *
+                  (Number(watchedItem.quantity) || 0);
                 return (
                   <div
                     key={field.id}
@@ -299,11 +302,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                         step="0.01"
                         min={0}
                         {...register(`items.${index}.unitPrice`, { valueAsNumber: true })}
-                        onChange={() => {
-                          const unitPrice = watch(`items.${index}.unitPrice`) || 0;
-                          const quantity = watch(`items.${index}.quantity`) || 0;
-                          setValue(`items.${index}.total`, unitPrice * quantity);
-                        }}
                         placeholder="0.00"
                       />
                     </div>
@@ -316,11 +314,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                         type="number"
                         min={0}
                         {...register(`items.${index}.quantity`, { valueAsNumber: true })}
-                        onChange={() => {
-                          const unitPrice = watch(`items.${index}.unitPrice`) || 0;
-                          const quantity = watch(`items.${index}.quantity`) || 0;
-                          setValue(`items.${index}.total`, unitPrice * quantity);
-                        }}
                         placeholder="0"
                       />
                     </div>

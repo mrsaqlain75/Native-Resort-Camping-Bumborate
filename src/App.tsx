@@ -8,12 +8,8 @@ import AddExpense from '@/pages/expenses/AddExpense'
 import MenuPage from '@/pages/menu/MenuPage'
 import ProfitLoss from '@/pages/analysis/ProfitLoss'
 import TodayReport from '@/pages/reports/TodayReport'
-import WeeklyReport from '@/pages/reports/WeeklyReport'
-import MonthlyReport from '@/pages/reports/MonthlyReport'
-import YearlyReport from '@/pages/reports/YearlyReport'
-import DateRangeReport from '@/pages/reports/DateRangeReport'
+import ReportsHub from '@/pages/reports/ReportsHub'
 import SellingRankings from '@/pages/reports/SellingRankings'
-import YearComparison from '@/pages/reports/YearComparison'
 import SalesExpenses from '@/pages/reports/SalesExpenses';
 import IncomePage from '@/pages/analysis/IncomePage'
 import ExpensesPage from '@/pages/analysis/ExpensesPage'
@@ -44,14 +40,14 @@ function AppRoutes() {
         <Route path="/menu" element={<MenuPage />} />
         <Route path="/reports/today" element={<TodayReport />} />
         <Route path="/sales-expenses" element={<SalesExpenses />} />
-        <Route path="/reports/weekly" element={<WeeklyReport />} />
-        <Route path="/reports/monthly" element={<MonthlyReport />} />
-        <Route path="/reports/yearly" element={<YearlyReport />} />
-        <Route path="/reports/range" element={<DateRangeReport />} />
+        <Route path="/reports" element={<ReportsHub />} />
+        <Route path="/reports/weekly" element={<Navigate to="/reports?tab=weekly" replace />} />
+        <Route path="/reports/monthly" element={<Navigate to="/reports?tab=monthly" replace />} />
+        <Route path="/reports/yearly" element={<Navigate to="/reports?tab=yearly" replace />} />
+        <Route path="/reports/range" element={<Navigate to="/reports?tab=range" replace />} />
         {isOwner && (
           <>
             <Route path="/reports/rankings" element={<SellingRankings />} />
-            <Route path="/reports/comparison" element={<YearComparison />} />
             <Route path="/analysis" element={<ProfitLoss />} />
             <Route path="/income" element={<IncomePage />} />
             <Route path="/expenses/list" element={<ExpensesPage />} />
