@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { BarChart3, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 
@@ -19,7 +18,6 @@ const startOfCurrentMonth = () => {
 const todayStr = () => localDate(new Date());
 
 export default function ProfitLoss() {
-  const [period, setPeriod] = useState<"daily" | "monthly" | "yearly">("monthly");
   const [from, setFrom] = useState(startOfCurrentMonth);
   const [to, setTo] = useState(todayStr);
   const [submitted, setSubmitted] = useState(true);
@@ -34,17 +32,8 @@ export default function ProfitLoss() {
 
   const { data: dailyData } = trpc.reports.dailyProfitLoss.useQuery(
     { from: fromParam, to: toParam },
-    { enabled: submitted && period === "daily" }
+    { enabled: submitted }
   );
-
-  const { data: monthlyData } = trpc.reports.monthlyProfitLoss.useQuery(
-    { year: new Date(from).getFullYear() },
-    { enabled: submitted && period === "monthly" }
-  );
-
-  const { data: yearlyData } = trpc.reports.yearlyProfitLoss.useQuery(undefined, {
-    enabled: submitted && period === "yearly",
-  });
 
   const pieData = summary ? [
     { name: "Restaurant Sales", value: summary.salesTotal },
@@ -52,11 +41,13 @@ export default function ProfitLoss() {
     { name: "Expenses", value: summary.expenseTotal },
   ].filter((d) => d.value > 0) : [];
 
-  const chartData = period === "daily"
-    ? (dailyData || []).map((d) => ({ label: d.date.slice(5), sales: d.sales, camping: d.camping, expenses: d.expenses, profit: d.profit }))
-    : period === "monthly"
-    ? (monthlyData || []).map((d) => ({ label: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.month - 1], sales: d.sales, camping: d.camping, expenses: d.expenses, profit: d.profit }))
-    : (yearlyData || []).map((d) => ({ label: String(d.year), sales: d.sales, camping: d.camping, expenses: d.expenses, profit: d.profit }));
+  const chartData = (dailyData || []).map((d) => ({
+    label: d.date.slice(5),
+    sales: d.sales,
+    camping: d.camping,
+    expenses: d.expenses,
+    profit: d.profit,
+  }));
 
   return (
     <div className="space-y-6">
@@ -71,17 +62,6 @@ export default function ProfitLoss() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap items-end gap-4">
-            <div>
-              <Label>Period</Label>
-              <Select value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
-                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="yearly">Yearly</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             <div>
               <Label>From</Label>
               <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -133,7 +113,7 @@ export default function ProfitLoss() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-lg font-serif">Trend Analysis</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg font-serif">Daily Trend</CardTitle></CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={chartData}>
