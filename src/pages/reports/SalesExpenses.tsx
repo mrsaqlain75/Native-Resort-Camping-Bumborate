@@ -203,6 +203,16 @@ export default function SalesExpenses() {
 
   const formatAmount = (amount: number) => `Rs. ${amount?.toLocaleString() || 0}`;
 
+  const getDiscountAmount = (record: any) => {
+    const value = Number(record.discountValue || 0);
+    if (record.discountType !== "percentage") return value;
+    const subtotal =
+      record.type === "camping"
+        ? Number(record.spotTotal || 0) + Number(record.servicesTotal || 0)
+        : (record.items || []).reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+    return (subtotal * value) / 100;
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -349,7 +359,7 @@ export default function SalesExpenses() {
                                 </div>
                               ))}
                             </TableCell>
-                            <TableCell>{record.discountPercent ? `${record.discountPercent}%` : "-"}</TableCell>
+                            <TableCell>{getDiscountAmount(record) > 0 ? formatAmount(getDiscountAmount(record)) : "-"}</TableCell>
                             <TableCell>{record.taxPercent ? `${record.taxPercent}%` : "-"}</TableCell>
                             <TableCell>
                               <Badge variant="outline">
@@ -373,7 +383,7 @@ export default function SalesExpenses() {
                             <TableCell>
                               {record.services?.length > 0 ? record.services.map((s: any) => s.name).join(", ") : "-"}
                             </TableCell>
-                            <TableCell>{record.discountPercent ? `${record.discountPercent}%` : "-"}</TableCell>
+                            <TableCell>{getDiscountAmount(record) > 0 ? formatAmount(getDiscountAmount(record)) : "-"}</TableCell>
                             <TableCell>{record.taxPercent ? `${record.taxPercent}%` : "-"}</TableCell>
                             <TableCell>
                               <Badge variant="outline">{record.paymentMethod === "cash" ? "Cash" : "E-Transaction"}</Badge>

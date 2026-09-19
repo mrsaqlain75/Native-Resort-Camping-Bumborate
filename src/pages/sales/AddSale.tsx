@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Trash2, Printer, Receipt, User, Percent } from "lucide-react";
+import { Plus, Trash2, Printer, Receipt, User, Percent, Banknote } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -26,12 +26,16 @@ const saleItemSchema = z.object({
 const saleSchema = z.object({
   customerName: z.string().optional(),
   items: z.array(saleItemSchema).min(1, "At least one item required"),
-  discountPercent: z.number().min(0).max(100).optional(),
+  discountType: z.enum(["percentage", "flat"]).default("flat"),
+  discountValue: z.number().min(0).optional(),
   taxPercent: z.number().min(0).max(100).optional(),
   paymentMethod: z.enum(["cash", "e_transaction"]),
   source: z.enum(["dine_in", "online_order", "other"]),
   dateTime: z.string(),
   note: z.string().optional(),
+}).refine((data) => data.discountType !== "percentage" || (data.discountValue ?? 0) <= 100, {
+  message: "Percentage discount cannot exceed 100",
+  path: ["discountValue"],
 });
 
 type SaleForm = z.infer<typeof saleSchema>;
@@ -42,7 +46,8 @@ interface AddSaleProps {
     customerName?: string | null;
     items: { name: string; quantity: number; unitPrice: number; total: number; isCamping?: boolean }[];
     totalAmount: number;
-    discountPercent?: string | null;
+    discountType?: string | null;
+    discountValue?: string | null;
     taxPercent?: string | null;
     paymentMethod: string;
     source: string;
@@ -73,7 +78,8 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
     defaultValues: {
       customerName: "",
       items: [{ name: "", quantity: 1, unitPrice: 0, total: 0 }],
-      discountPercent: 0,
+      discountType: "flat",
+      discountValue: 0,
       taxPercent: 0,
       paymentMethod: "cash",
       source: "dine_in",
@@ -86,7 +92,8 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
     if (saleToEdit) {
       setValue("customerName", saleToEdit.customerName || "");
       setValue("items", saleToEdit.items);
-      setValue("discountPercent", saleToEdit.discountPercent ? Number(saleToEdit.discountPercent) : 0);
+      setValue("discountType", (saleToEdit.discountType as "percentage" | "flat") || "flat");
+      setValue("discountValue", saleToEdit.discountValue ? Number(saleToEdit.discountValue) : 0);
       setValue("taxPercent", saleToEdit.taxPercent ? Number(saleToEdit.taxPercent) : 0);
       setValue("paymentMethod", saleToEdit.paymentMethod as "cash" | "e_transaction");
       setValue("source", saleToEdit.source as "dine_in" | "online_order" | "other");
@@ -114,7 +121,9 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
         customerName: watch("customerName") || "Walk-in Customer",
         items: watch("items"),
         subtotal: watch("items").reduce((sum, item) => sum + item.total, 0),
-        discountPercent: watch("discountPercent") || 0,
+        discountType: watch("discountType") || "flat",
+        discountValue: watch("discountValue") || 0,
+        discountAmount,
         taxPercent: watch("taxPercent") || 0,
         totalAmount: calculateFinalTotal(),
         paymentMethod: watch("paymentMethod"),
@@ -145,10 +154,14 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
   };
 
   const subtotal = watch("items").reduce((sum, item) => sum + (item.total || 0), 0);
-  const discountPercent = watch("discountPercent") || 0;
+  const discountType = watch("discountType") || "flat";
+  const discountValue = watch("discountValue") || 0;
+  const discountAmount = Math.min(
+    discountType === "percentage" ? (subtotal * discountValue) / 100 : discountValue,
+    subtotal
+  );
   const taxPercent = watch("taxPercent") || 0;
-  
-  const discountAmount = (subtotal * discountPercent) / 100;
+
   const afterDiscount = subtotal - discountAmount;
   const taxAmount = (afterDiscount * taxPercent) / 100;
   const grandTotal = afterDiscount + taxAmount;
@@ -332,19 +345,40 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
             {/* Discount and Tax Section */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
-                <Label htmlFor="discountPercent" className="flex items-center gap-2">
-                  <Percent className="h-4 w-4" />
-                  Discount (%)
-                </Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="discountValue" className="flex items-center gap-2">
+                    {discountType === "percentage" ? <Percent className="h-4 w-4" /> : <Banknote className="h-4 w-4" />}
+                    Discount
+                  </Label>
+                  <div className="flex rounded-md border border-[var(--border)] overflow-hidden text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setValue("discountType", "flat")}
+                      className={`px-2 py-1 ${discountType === "flat" ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : "bg-transparent"}`}
+                    >
+                      Rs.
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setValue("discountType", "percentage")}
+                      className={`px-2 py-1 ${discountType === "percentage" ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : "bg-transparent"}`}
+                    >
+                      %
+                    </button>
+                  </div>
+                </div>
                 <Input
-                  id="discountPercent"
+                  id="discountValue"
                   type="number"
                   step="0.01"
                   min={0}
-                  max={100}
-                  {...register("discountPercent", { valueAsNumber: true })}
+                  max={discountType === "percentage" ? 100 : undefined}
+                  {...register("discountValue", { valueAsNumber: true })}
                   placeholder="0"
                 />
+                {errors.discountValue?.message && (
+                  <p className="text-sm text-[var(--destructive)]">{errors.discountValue.message}</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="taxPercent" className="flex items-center gap-2">
@@ -369,9 +403,9 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
                 <span>Subtotal:</span>
                 <span>Rs. {subtotal.toLocaleString()}</span>
               </div>
-              {discountPercent > 0 && (
+              {discountAmount > 0 && (
                 <div className="flex justify-between text-sm text-[var(--positive)]">
-                  <span>Discount ({discountPercent}%):</span>
+                  <span>Discount{discountType === "percentage" ? ` (${discountValue}%)` : ""}:</span>
                   <span>- Rs. {discountAmount.toLocaleString()}</span>
                 </div>
               )}
@@ -510,16 +544,16 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
                     <span>Subtotal:</span>
                     <span>Rs. {receiptSale.subtotal.toLocaleString()}</span>
                   </div>
-                  {receiptSale.discountPercent > 0 && (
+                  {receiptSale.discountAmount > 0 && (
                     <div className="flex justify-between text-xs text-[var(--positive)]">
-                      <span>Discount ({receiptSale.discountPercent}%):</span>
-                      <span>- Rs. {((receiptSale.subtotal * receiptSale.discountPercent) / 100).toLocaleString()}</span>
+                      <span>Discount{receiptSale.discountType === "percentage" ? ` (${receiptSale.discountValue}%)` : ""}:</span>
+                      <span>- Rs. {receiptSale.discountAmount.toLocaleString()}</span>
                     </div>
                   )}
                   {receiptSale.taxPercent > 0 && (
                     <div className="flex justify-between text-xs text-orange-600">
                       <span>Sales Tax ({receiptSale.taxPercent}%):</span>
-                      <span>+ Rs. {(((receiptSale.subtotal - (receiptSale.subtotal * receiptSale.discountPercent) / 100) * receiptSale.taxPercent) / 100).toLocaleString()}</span>
+                      <span>+ Rs. {(((receiptSale.subtotal - receiptSale.discountAmount) * receiptSale.taxPercent) / 100).toLocaleString()}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm font-bold pt-1 border-t border-black">

@@ -24,6 +24,7 @@ export const expensePaymentMethodEnum = pgEnum("expense_payment_method", [
   "bank_transfer",
 ]);
 export const salesSourceEnum = pgEnum("sales_source", ["dine_in", "online_order", "other"]);
+export const discountTypeEnum = pgEnum("discount_type", ["percentage", "flat"]);
 export const expenseCategoryEnum = pgEnum("expense_category", [
   "food",
   "supplies",
@@ -79,7 +80,8 @@ export const sales = pgTable("sales", {
     .$type<{ name: string; quantity: number; unitPrice: number; total: number }[]>()
     .notNull(),
   totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
-  discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).default("0"),
+  discountType: discountTypeEnum("discount_type").default("flat").notNull(),
+  discountValue: numeric("discount_percent", { precision: 12, scale: 2 }).default("0"),
   taxPercent: numeric("tax_percent", { precision: 5, scale: 2 }).default("0"),
   paymentMethod: paymentMethodEnum("payment_method").notNull(),
   source: salesSourceEnum("source").notNull(),
@@ -127,7 +129,8 @@ export const campingSales = pgTable("camping_sales", {
     .default("0.00")
     .notNull(),
   totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
-  discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).default("0"),
+  discountType: discountTypeEnum("discount_type").default("flat").notNull(),
+  discountValue: numeric("discount_percent", { precision: 12, scale: 2 }).default("0"),
   taxPercent: numeric("tax_percent", { precision: 5, scale: 2 }).default("0"),
   paymentMethod: paymentMethodEnum("payment_method").notNull(),
   dateTime: timestamp("date_time", { mode: "date" }).notNull(),

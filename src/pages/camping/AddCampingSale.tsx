@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tent, Printer, Percent, User } from "lucide-react";
+import { Tent, Printer, Percent, User, Banknote } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { toast } from "sonner";
 
@@ -38,7 +38,8 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
   const [checkOut, setCheckOut] = useState("");
   const [peopleCount, setPeopleCount] = useState(2);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
-  const [discountPercent, setDiscountPercent] = useState(0);
+  const [discountType, setDiscountType] = useState<"percentage" | "flat">("flat");
+  const [discountValue, setDiscountValue] = useState(0);
   const [taxPercent, setTaxPercent] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "e_transaction">("cash");
   const [dateTime, setDateTime] = useState(new Date().toISOString().slice(0, 16));
@@ -63,7 +64,8 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
       setCheckOut(checkOutValue);
       setPeopleCount(campingSaleToEdit.peopleCount || 2);
       setSelectedServices(campingSaleToEdit.services?.map((s: any) => s.name) || []);
-      setDiscountPercent(campingSaleToEdit.discountPercent ? Number(campingSaleToEdit.discountPercent) : 0);
+      setDiscountType((campingSaleToEdit.discountType as "percentage" | "flat") || "flat");
+      setDiscountValue(campingSaleToEdit.discountValue ? Number(campingSaleToEdit.discountValue) : 0);
       setTaxPercent(campingSaleToEdit.taxPercent ? Number(campingSaleToEdit.taxPercent) : 0);
       setPaymentMethod(campingSaleToEdit.paymentMethod || "cash");
       const dateTimeValue = campingSaleToEdit.dateTime 
@@ -83,7 +85,10 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
     return sum + (svc?.price || 0);
   }, 0);
   const subtotal = spotTotal + servicesTotal;
-  const discountAmount = (subtotal * discountPercent) / 100;
+  const discountAmount = Math.min(
+    discountType === "percentage" ? (subtotal * discountValue) / 100 : discountValue,
+    subtotal
+  );
   const afterDiscount = subtotal - discountAmount;
   const taxAmount = (afterDiscount * taxPercent) / 100;
   const grandTotal = afterDiscount + taxAmount;
@@ -103,7 +108,9 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
         nights,
         services: selectedServices.map((sName) => ({ name: sName, price: CAMPING_SERVICES.find((s) => s.name === sName)?.price || 0 })),
         subtotal,
-        discountPercent,
+        discountType,
+        discountValue,
+        discountAmount,
         taxPercent,
         totalAmount: grandTotal,
         paymentMethod,
@@ -132,7 +139,8 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
     setCheckOut("");
     setPeopleCount(2);
     setSelectedServices([]);
-    setDiscountPercent(0);
+    setDiscountType("flat");
+    setDiscountValue(0);
     setTaxPercent(0);
     setPaymentMethod("cash");
     setDateTime(new Date().toISOString().slice(0, 16));
@@ -144,7 +152,11 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
       toast.error("Please fill all required fields");
       return;
     }
-    
+    if (discountType === "percentage" && discountValue > 100) {
+      toast.error("Percentage discount cannot exceed 100");
+      return;
+    }
+
     const payload = {
       customerName,
       checkIn,
@@ -156,7 +168,8 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
       spotTotal,
       servicesTotal,
       totalAmount: grandTotal,
-      discountPercent,
+      discountType,
+      discountValue,
       taxPercent,
       paymentMethod,
       dateTime,
@@ -257,17 +270,35 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
-              <Label className="flex items-center gap-2">
-                <Percent className="h-4 w-4" />
-                Discount (%)
-              </Label>
-              <Input 
-                type="number" 
-                step="0.01" 
-                min={0} 
-                max={100}
-                value={discountPercent} 
-                onChange={(e) => setDiscountPercent(Number(e.target.value))} 
+              <div className="flex items-center justify-between gap-2">
+                <Label className="flex items-center gap-2">
+                  {discountType === "percentage" ? <Percent className="h-4 w-4" /> : <Banknote className="h-4 w-4" />}
+                  Discount
+                </Label>
+                <div className="flex rounded-md border border-[var(--border)] overflow-hidden text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setDiscountType("flat")}
+                    className={`px-2 py-1 ${discountType === "flat" ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : "bg-transparent"}`}
+                  >
+                    Rs.
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDiscountType("percentage")}
+                    className={`px-2 py-1 ${discountType === "percentage" ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : "bg-transparent"}`}
+                  >
+                    %
+                  </button>
+                </div>
+              </div>
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                max={discountType === "percentage" ? 100 : undefined}
+                value={discountValue}
+                onChange={(e) => setDiscountValue(Number(e.target.value))}
                 placeholder="0"
               />
             </div>
@@ -293,9 +324,9 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
               <span>Subtotal:</span>
               <span>Rs. {subtotal.toLocaleString()}</span>
             </div>
-            {discountPercent > 0 && (
+            {discountAmount > 0 && (
               <div className="flex justify-between text-sm text-[var(--positive)]">
-                <span>Discount ({discountPercent}%):</span>
+                <span>Discount{discountType === "percentage" ? ` (${discountValue}%)` : ""}:</span>
                 <span>- Rs. {discountAmount.toLocaleString()}</span>
               </div>
             )}
@@ -398,16 +429,16 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
                     <span>Subtotal:</span>
                     <span>Rs. {receiptData.subtotal?.toLocaleString() || 0}</span>
                   </div>
-                  {receiptData.discountPercent > 0 && (
+                  {receiptData.discountAmount > 0 && (
                     <div className="flex justify-between text-xs text-[var(--positive)]">
-                      <span>Discount ({receiptData.discountPercent}%):</span>
-                      <span>- Rs. {((receiptData.subtotal * receiptData.discountPercent) / 100).toLocaleString()}</span>
+                      <span>Discount{receiptData.discountType === "percentage" ? ` (${receiptData.discountValue}%)` : ""}:</span>
+                      <span>- Rs. {receiptData.discountAmount.toLocaleString()}</span>
                     </div>
                   )}
                   {receiptData.taxPercent > 0 && (
                     <div className="flex justify-between text-xs text-orange-600">
                       <span>Sales Tax ({receiptData.taxPercent}%):</span>
-                      <span>+ Rs. {(((receiptData.subtotal - (receiptData.subtotal * receiptData.discountPercent) / 100) * receiptData.taxPercent) / 100).toLocaleString()}</span>
+                      <span>+ Rs. {(((receiptData.subtotal - receiptData.discountAmount) * receiptData.taxPercent) / 100).toLocaleString()}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm font-bold pt-1 border-t border-black">
