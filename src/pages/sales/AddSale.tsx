@@ -11,9 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Trash2, Printer, Receipt, User, Percent, Banknote } from "lucide-react";
+import { Plus, Trash2, Receipt, User, Percent, Banknote } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { printReceipt } from "@/lib/print-receipt";
 
 const saleItemSchema = z.object({
   name: z.string().min(1, "Item name is required"),
@@ -26,7 +27,7 @@ const saleItemSchema = z.object({
 const saleSchema = z.object({
   customerName: z.string().optional(),
   items: z.array(saleItemSchema).min(1, "At least one item required"),
-  discountType: z.enum(["percentage", "flat"]).default("flat"),
+  discountType: z.enum(["percentage", "flat"]),
   discountValue: z.number().min(0).optional(),
   taxPercent: z.number().min(0).max(100).optional(),
   paymentMethod: z.enum(["cash", "e_transaction"]),
@@ -116,20 +117,55 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
       utils.reports.dashboardSummary.invalidate();
       utils.reports.recentActivity.invalidate();
       utils.sales.todaySummary.invalidate();
+      const items = watch("items");
+      const customerName = watch("customerName") || "Walk-in Customer";
+      const currentDiscountType = watch("discountType") || "flat";
+      const currentDiscountValue = watch("discountValue") || 0;
+      const currentTaxPercent = watch("taxPercent") || 0;
+      const currentSource = watch("source");
+      const currentPaymentMethod = watch("paymentMethod");
+      const currentDateTime = watch("dateTime");
+      const currentNote = watch("note");
       setReceiptSale({
         id: data.id,
-        customerName: watch("customerName") || "Walk-in Customer",
-        items: watch("items"),
-        subtotal: watch("items").reduce((sum, item) => sum + item.total, 0),
-        discountType: watch("discountType") || "flat",
-        discountValue: watch("discountValue") || 0,
+        customerName,
+        items,
+        subtotal,
+        discountType: currentDiscountType,
+        discountValue: currentDiscountValue,
         discountAmount,
-        taxPercent: watch("taxPercent") || 0,
+        taxPercent: currentTaxPercent,
         totalAmount: calculateFinalTotal(),
-        paymentMethod: watch("paymentMethod"),
-        source: watch("source"),
-        dateTime: watch("dateTime"),
-        note: watch("note"),
+        paymentMethod: currentPaymentMethod,
+        source: currentSource,
+        dateTime: currentDateTime,
+        note: currentNote,
+      });
+      printReceipt({
+        documentTitle: "Sale Receipt",
+        receiptLabel: "Sale Receipt",
+        receiptNumber: String(data.id).padStart(6, "0"),
+        customerName,
+        meta: [
+          { label: "Date", value: format(new Date(currentDateTime), "MMM dd, yyyy hh:mm a") },
+          { label: "Payment", value: currentPaymentMethod === "cash" ? "Cash" : "E-Transaction" },
+          { label: "Source", value: currentSource.replace("_", " ").replace(/\b\w/g, (l: string) => l.toUpperCase()) },
+        ],
+        items: items.map((item) => ({
+          name: item.name,
+          qty: item.quantity,
+          unitPrice: item.unitPrice,
+          amount: item.total,
+          tag: item.isCamping ? "🏕" : undefined,
+        })),
+        showQtyColumn: true,
+        subtotal,
+        discountAmount,
+        discountLabel: currentDiscountType === "percentage" ? `Discount (${currentDiscountValue}%)` : "Discount",
+        taxPercent: currentTaxPercent,
+        taxAmount,
+        totalAmount: calculateFinalTotal(),
+        note: currentNote,
       });
       reset();
       if (onClose) onClose();
@@ -501,7 +537,7 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
               <DialogTitle className="text-center font-serif">Receipt</DialogTitle>
             </DialogHeader>
             {receiptSale && (
-              <div className="bg-white text-black p-6 rounded-lg space-y-4" id="receipt">
+              <div className="bg-white text-black p-6 rounded-lg space-y-4">
                 <div className="text-center border-b border-black pb-3">
                   <h2 className="text-xl font-bold font-serif">Native Camping and Restaurant</h2>
                   <p className="text-xs">Bumburate</p>
@@ -563,31 +599,6 @@ export default function AddSale({ saleToEdit, onClose }: AddSaleProps) {
                 </div>
                 {receiptSale.note && <p className="text-xs text-gray-500">Note: {receiptSale.note}</p>}
                 <p className="text-center text-[10px] pt-2">Thank you for visiting Native Camping and Restaurant!</p>
-                <Button
-                  className="w-full mt-2"
-                  onClick={() => {
-                    const printWindow = window.open("", "_blank");
-                    if (printWindow) {
-                      printWindow.document.write(`
-                        <html><head><title>Receipt</title>
-                        <style>
-                          body { font-family: sans-serif; padding: 20px; width: 148mm; }
-                          h2 { text-align: center; margin: 0; }
-                          p { margin: 2px 0; }
-                          table { width: 100%; border-collapse: collapse; }
-                          th, td { text-align: left; padding: 4px; }
-                          .total { font-weight: bold; border-top: 2px solid black; margin-top: 10px; padding-top: 5px; }
-                        </style></head><body>
-                        ${document.getElementById("receipt")?.innerHTML || ""}
-                        </body></html>
-                      `);
-                      printWindow.document.close();
-                      printWindow.print();
-                    }
-                  }}
-                >
-                  <Printer className="h-4 w-4 mr-2" /> Print Receipt
-                </Button>
               </div>
             )}
           </DialogContent>

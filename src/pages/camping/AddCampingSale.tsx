@@ -8,9 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tent, Printer, Percent, User, Banknote } from "lucide-react";
+import { Tent, Percent, User, Banknote } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { toast } from "sonner";
+import { printReceipt } from "@/lib/print-receipt";
 
 const CAMPING_SERVICES = [
   { name: "Firewood", price: 500 },
@@ -94,19 +95,20 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
   const grandTotal = afterDiscount + taxAmount;
 
   const createSale = trpc.camping.sales.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success("Camping sale recorded!");
       utils.reports.dashboardSummary.invalidate();
       utils.camping.sales.list.invalidate();
+      const services = selectedServices.map((sName) => ({ name: sName, price: CAMPING_SERVICES.find((s) => s.name === sName)?.price || 0 }));
       setReceiptData({
-        id: Date.now(),
+        id: data.id,
         customerName,
         numberOfCamps,
         checkIn,
         checkOut,
         peopleCount,
         nights,
-        services: selectedServices.map((sName) => ({ name: sName, price: CAMPING_SERVICES.find((s) => s.name === sName)?.price || 0 })),
+        services,
         subtotal,
         discountType,
         discountValue,
@@ -115,6 +117,30 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
         totalAmount: grandTotal,
         paymentMethod,
         dateTime,
+      });
+      printReceipt({
+        documentTitle: "Camping Receipt",
+        receiptLabel: "Camping Receipt",
+        receiptNumber: String(data.id).padStart(6, "0"),
+        customerName,
+        meta: [
+          { label: "Check-in", value: format(new Date(checkIn), "MMM dd, yyyy") },
+          { label: "Check-out", value: format(new Date(checkOut), "MMM dd, yyyy") },
+          { label: "Nights / People", value: `${nights} / ${peopleCount}` },
+          { label: "Payment", value: paymentMethod === "cash" ? "Cash" : "E-Transaction" },
+        ],
+        items: [
+          { name: `Camp Spot (${numberOfCamps} camp${numberOfCamps > 1 ? "s" : ""} x ${nights} night${nights > 1 ? "s" : ""})`, amount: spotTotal },
+          ...services.map((s) => ({ name: s.name, amount: s.price })),
+        ],
+        showQtyColumn: false,
+        subtotal,
+        discountAmount,
+        discountLabel: discountType === "percentage" ? `Discount (${discountValue}%)` : "Discount",
+        taxPercent,
+        taxAmount,
+        totalAmount: grandTotal,
+        note,
       });
       resetForm();
       if (onClose) onClose();
@@ -391,7 +417,7 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
               <DialogTitle className="text-center font-serif">Camping Receipt</DialogTitle>
             </DialogHeader>
             {receiptData && (
-              <div className="bg-white text-black p-6 rounded-lg space-y-4" id="camping-receipt">
+              <div className="bg-white text-black p-6 rounded-lg space-y-4">
                 <div className="text-center border-b border-black pb-3">
                   <h2 className="text-xl font-bold font-serif">Native Camping and Restaurant</h2>
                   <p className="text-xs">Bumburate</p>
@@ -447,31 +473,6 @@ export default function AddCampingSale({ campingSaleToEdit, onClose }: AddCampin
                   </div>
                 </div>
                 <p className="text-center text-[10px] pt-2">Thank you for camping with us!</p>
-                <Button
-                  className="w-full mt-2"
-                  onClick={() => {
-                    const printWindow = window.open("", "_blank");
-                    if (printWindow) {
-                      printWindow.document.write(`
-                        <html><head><title>Camping Receipt</title>
-                        <style>
-                          body { font-family: sans-serif; padding: 20px; width: 148mm; }
-                          h2 { text-align: center; margin: 0; }
-                          p { margin: 2px 0; }
-                          table { width: 100%; border-collapse: collapse; }
-                          th, td { text-align: left; padding: 4px; }
-                          .total { font-weight: bold; border-top: 2px solid black; margin-top: 10px; padding-top: 5px; }
-                        </style></head><body>
-                        ${document.getElementById("camping-receipt")?.innerHTML || ""}
-                        </body></html>
-                      `);
-                      printWindow.document.close();
-                      printWindow.print();
-                    }
-                  }}
-                >
-                  <Printer className="h-4 w-4 mr-2" /> Print Receipt
-                </Button>
               </div>
             )}
           </DialogContent>
