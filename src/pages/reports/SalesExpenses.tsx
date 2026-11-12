@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,11 +32,11 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Edit, Trash2, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Edit, Trash2, Search, ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
-type ViewType = "restaurant" | "camping" | "expenses";
+type ViewType = "all" | "restaurant" | "camping" | "expenses";
 
 type CombinedRecord = {
   id: number;
@@ -46,6 +46,12 @@ type CombinedRecord = {
   amount?: number;
   [key: string]: any;
 };
+
+// Expense rows store money as numeric strings; fall back to amount × qty.
+const expenseTotalOf = (record: any): number =>
+  Number(record.total || (Number(record.amount) * (record.quantity || 1))) || 0;
+
+const vendorOf = (record: any): string => record.paidTo || "No Vendor";
 
 export default function SalesExpenses() {
   const utils = trpc.useUtils();
@@ -59,18 +65,19 @@ export default function SalesExpenses() {
   const [recordToDelete, setRecordToDelete] = useState<{ id: number; type: string } | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<CombinedRecord | null>(null);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [selectedVendor, setSelectedVendor] = useState<string | null>(null);
   const ITEMS_PER_PAGE = 20;
 
   const { data: restaurantSales, isLoading: salesLoading, refetch: refetchSales } = trpc.sales.list.useQuery(undefined, {
-    enabled: view === "restaurant",
+    enabled: view === "restaurant" || view === "all",
   });
 
   const { data: campingSales, isLoading: campingLoading, refetch: refetchCamping } = trpc.camping.sales.list.useQuery(undefined, {
-    enabled: view === "camping",
+    enabled: view === "camping" || view === "all",
   });
 
   const { data: expenses, isLoading: expensesLoading, refetch: refetchExpenses } = trpc.expenses.list.useQuery(undefined, {
-    enabled: view === "expenses",
+    enabled: view === "expenses" || view === "all",
   });
 
   const deleteSale = trpc.sales.delete.useMutation({
@@ -106,10 +113,16 @@ export default function SalesExpenses() {
     onError: (err) => toast.error(err.message),
   });
 
-  const getRecords = (): CombinedRecord[] => {
+  const filteredRecords = useMemo((): CombinedRecord[] => {
     let records: CombinedRecord[] = [];
 
-    if (view === "restaurant" && restaurantSales) {
+    if (view === "all") {
+      records = [
+        ...(restaurantSales || []).map((sale: any) => ({ ...sale, type: "restaurant" as const })),
+        ...(campingSales || []).map((sale: any) => ({ ...sale, type: "camping" as const })),
+        ...(expenses || []).map((expense: any) => ({ ...expense, type: "expenses" as const })),
+      ];
+    } else if (view === "restaurant" && restaurantSales) {
       records = restaurantSales.map((sale: any) => ({ ...sale, type: "restaurant" as const }));
     } else if (view === "camping" && campingSales) {
       records = campingSales.map((sale: any) => ({ ...sale, type: "camping" as const }));
@@ -169,17 +182,65 @@ export default function SalesExpenses() {
     records.sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
 
     return records;
-  };
+  }, [view, restaurantSales, campingSales, expenses, searchTerm, dateFilter, customStartDate, customEndDate]);
 
-  const getPaginatedRecords = () => {
-    const records = getRecords();
-    const start = (page - 1) * ITEMS_PER_PAGE;
-    return records.slice(start, start + ITEMS_PER_PAGE);
-  };
+  const totals = useMemo(() => {
+    let restaurant = 0;
+    let camping = 0;
+    let expensesTotal = 0;
+    let restaurantCount = 0;
+    let campingCount = 0;
+    let expensesCount = 0;
+    for (const record of filteredRecords) {
+      if (record.type === "restaurant") {
+        restaurant += Number(record.totalAmount) || 0;
+        restaurantCount++;
+      } else if (record.type === "camping") {
+        camping += Number(record.totalAmount) || 0;
+        campingCount++;
+      } else {
+        expensesTotal += expenseTotalOf(record);
+        expensesCount++;
+      }
+    }
+    return { restaurant, camping, expensesTotal, restaurantCount, campingCount, expensesCount };
+  }, [filteredRecords]);
 
-  const getTotalPages = () => {
-    return Math.ceil(getRecords().length / ITEMS_PER_PAGE);
-  };
+  // Expenses grouped by vendor, for the grouped Expenses view
+  const vendorGroups = useMemo(() => {
+    const groups = new Map<string, { vendor: string; count: number; total: number }>();
+    for (const record of filteredRecords) {
+      if (record.type !== "expenses") continue;
+      const vendor = vendorOf(record);
+      const group = groups.get(vendor) || { vendor, count: 0, total: 0 };
+      group.count++;
+      group.total += expenseTotalOf(record);
+      groups.set(vendor, group);
+    }
+    const list = [...groups.values()];
+    list.sort((a, b) =>
+      a.vendor === "No Vendor" ? 1 : b.vendor === "No Vendor" ? -1 : b.total - a.total
+    );
+    return list;
+  }, [filteredRecords]);
+
+  const isVendorListView = view === "expenses" && selectedVendor === null;
+
+  const vendorExpenses = useMemo(() => {
+    if (view !== "expenses" || selectedVendor === null) return [];
+    return filteredRecords.filter(
+      (record) => record.type === "expenses" && vendorOf(record) === selectedVendor
+    );
+  }, [filteredRecords, view, selectedVendor]);
+
+  // Vendor list mode renders its own table; otherwise show filtered records
+  // (vendor detail mode shows just that vendor's expenses).
+  const displayedRecords =
+    view === "expenses" && selectedVendor !== null ? vendorExpenses : filteredRecords;
+
+  const start = (page - 1) * ITEMS_PER_PAGE;
+  const paginatedRecords = displayedRecords.slice(start, start + ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(displayedRecords.length / ITEMS_PER_PAGE);
 
   const handleDelete = () => {
     if (!recordToDelete) return;
@@ -213,6 +274,79 @@ export default function SalesExpenses() {
     return (subtotal * value) / 100;
   };
 
+  const describeRecord = (record: CombinedRecord): string => {
+    if (record.type === "restaurant") {
+      const items = record.items || [];
+      const names = items.map((i: any) => `${i.name} x${i.quantity}`);
+      return names.length <= 2 ? names.join(", ") : `${names[0]} +${names.length - 1} more`;
+    }
+    if (record.type === "camping") {
+      return `${record.numberOfCamps} camp${record.numberOfCamps === 1 ? "" : "s"}, ${record.nights} night${record.nights === 1 ? "" : "s"}`;
+    }
+    return record.name;
+  };
+
+  const formatPayment = (method: string) =>
+    method === "cash" ? "Cash" : method === "e_transaction" ? "E-Transaction" : "Bank Transfer";
+
+  const selectVendor = (vendor: string) => {
+    setSelectedVendor(vendor);
+    setPage(1);
+  };
+
+  // ── Totals shown below the table ──
+  const renderTotals = () => {
+    if (view === "all") {
+      const net = totals.restaurant + totals.camping - totals.expensesTotal;
+      return (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 border-t">
+          <div>
+            <p className="text-xs text-[var(--muted-foreground)]">Restaurant Sales ({totals.restaurantCount})</p>
+            <p className="text-base font-bold text-[var(--chart-1)]">+{formatAmount(totals.restaurant)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--muted-foreground)]">Camping Sales ({totals.campingCount})</p>
+            <p className="text-base font-bold text-[var(--chart-2)]">+{formatAmount(totals.camping)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--muted-foreground)]">Total Income</p>
+            <p className="text-base font-bold text-[var(--positive)]">+{formatAmount(totals.restaurant + totals.camping)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--muted-foreground)]">Expenses ({totals.expensesCount})</p>
+            <p className="text-base font-bold text-[var(--destructive)]">-{formatAmount(totals.expensesTotal)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--muted-foreground)]">Net</p>
+            <p className={`text-base font-bold ${net >= 0 ? "text-[var(--positive)]" : "text-[var(--destructive)]"}`}>
+              {net >= 0 ? "+" : "-"}{formatAmount(Math.abs(net))}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // Single-type views (and vendor detail)
+    const isExpenseView = view === "expenses";
+    const totalValue = isExpenseView
+      ? isVendorListView
+        ? totals.expensesTotal
+        : vendorExpenses.reduce((sum, r) => sum + expenseTotalOf(r), 0)
+      : displayedRecords.reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0);
+    const recordCount = isVendorListView ? totals.expensesCount : displayedRecords.length;
+
+    return (
+      <div className="flex justify-end items-center gap-6 p-4 border-t">
+        <span className="text-sm text-[var(--muted-foreground)]">
+          Total — {recordCount} record{recordCount === 1 ? "" : "s"}
+        </span>
+        <span className={`text-lg font-bold ${isExpenseView ? "text-[var(--destructive)]" : "text-[var(--positive)]"}`}>
+          {isExpenseView ? "-" : "+"}{formatAmount(totalValue)}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -225,8 +359,10 @@ export default function SalesExpenses() {
       <Tabs value={view} onValueChange={(v) => {
         setView(v as ViewType);
         setPage(1);
+        setSelectedVendor(null);
       }}>
-        <TabsList className="grid w-full max-w-md grid-cols-3">
+        <TabsList className="grid w-full max-w-2xl grid-cols-4">
+          <TabsTrigger value="all">📋 All</TabsTrigger>
           <TabsTrigger value="restaurant">🍽️ Restaurant Sales</TabsTrigger>
           <TabsTrigger value="camping">🏕️ Camping Sales</TabsTrigger>
           <TabsTrigger value="expenses">💰 Expenses</TabsTrigger>
@@ -244,7 +380,7 @@ export default function SalesExpenses() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[var(--muted-foreground)]" />
                 <Input
-                  placeholder="Search by item, customer, or expense name..."
+                  placeholder="Search by item, customer, vendor, or expense name..."
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
@@ -298,13 +434,70 @@ export default function SalesExpenses() {
             <div className="flex justify-center items-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
             </div>
+          ) : isVendorListView ? (
+            /* ── Expenses grouped by vendor ── */
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Vendor</TableHead>
+                    <TableHead>Expenses</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {vendorGroups.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-[var(--muted-foreground)]">
+                        No expenses found for the selected filters
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    vendorGroups.map((group) => (
+                      <TableRow
+                        key={group.vendor}
+                        className="cursor-pointer hover:bg-[var(--accent)]/50"
+                        onClick={() => selectVendor(group.vendor)}
+                      >
+                        <TableCell className="font-medium">{group.vendor}</TableCell>
+                        <TableCell>{group.count}</TableCell>
+                        <TableCell className="font-bold text-[var(--destructive)]">
+                          -{formatAmount(group.total)}
+                        </TableCell>
+                        <TableCell>
+                          <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)]" />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+              {renderTotals()}
+            </div>
           ) : (
             <>
+              {view === "expenses" && selectedVendor !== null && (
+                <div className="p-4 border-b">
+                  <Button variant="outline" size="sm" onClick={() => { setSelectedVendor(null); setPage(1); }}>
+                    <ArrowLeft className="h-4 w-4 mr-1" /> Back to Vendors
+                  </Button>
+                  <span className="ml-3 text-sm font-medium">{selectedVendor}</span>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date & Time</TableHead>
+                      {view === "all" && (
+                        <>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Details</TableHead>
+                          <TableHead>Payment</TableHead>
+                          <TableHead>Amount</TableHead>
+                        </>
+                      )}
                       {view === "restaurant" && (
                         <>
                             <TableHead>Customer Name</TableHead>
@@ -343,108 +536,141 @@ export default function SalesExpenses() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {getPaginatedRecords().map((record: any) => (
-                      <TableRow key={`${record.type}-${record.id}`} className={getRowColor(record.type)}>
-                        <TableCell className="whitespace-nowrap">
-                          {format(new Date(record.dateTime), "MMM dd, yyyy hh:mm a")}
-                        </TableCell>
-
-                        {record.type === "restaurant" && (
-                          <>
-                            <TableCell>{record.customerName || "Walk-in Customer"}</TableCell>
-                            <TableCell>
-                              {record.items?.map((item: any, i: number) => (
-                                <div key={i} className="text-sm">
-                                  {item.name} x{item.quantity}
-                                </div>
-                              ))}
-                            </TableCell>
-                            <TableCell>{getDiscountAmount(record) > 0 ? formatAmount(getDiscountAmount(record)) : "-"}</TableCell>
-                            <TableCell>{record.taxPercent ? `${record.taxPercent}%` : "-"}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline">
-                                {record.source === "dine_in" ? "Dine-In" : record.source === "online_order" ? "Online" : "Other"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{record.paymentMethod === "cash" ? "Cash" : "E-Transaction"}</Badge>
-                            </TableCell>
-                            <TableCell className="text-[var(--positive)] font-semibold">
-                              +{formatAmount(record.totalAmount)}
-                            </TableCell>
-                          </>
-                        )}
-
-                        {record.type === "camping" && (
-                          <>
-                            <TableCell className="font-medium">{record.customerName}</TableCell>
-                            <TableCell>{record.numberOfCamps}</TableCell>
-                            <TableCell>{record.nights}</TableCell>
-                            <TableCell>
-                              {record.services?.length > 0 ? record.services.map((s: any) => s.name).join(", ") : "-"}
-                            </TableCell>
-                            <TableCell>{getDiscountAmount(record) > 0 ? formatAmount(getDiscountAmount(record)) : "-"}</TableCell>
-                            <TableCell>{record.taxPercent ? `${record.taxPercent}%` : "-"}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{record.paymentMethod === "cash" ? "Cash" : "E-Transaction"}</Badge>
-                            </TableCell>
-                            <TableCell className="text-[var(--positive)] font-semibold">
-                              +{formatAmount(record.totalAmount)}
-                            </TableCell>
-                          </>
-                        )}
-
-                        {record.type === "expenses" && (
-                          <>
-                            <TableCell>{record.name}</TableCell>
-                            <TableCell>Rs. {Number(record.amount).toLocaleString()}</TableCell>
-                            <TableCell>{record.quantity || 0}</TableCell>
-                            <TableCell className="font-bold text-[var(--primary)]">
-                              Rs. {Number(record.total || (record.amount * (record.quantity || 1))).toLocaleString()}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="capitalize">{record.category}</Badge>
-                            </TableCell>
-                            <TableCell>{record.paidTo || "-"}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline">
-                                {record.paymentMethod === "cash" ? "Cash" : record.paymentMethod === "e_transaction" ? "E-Transaction" : "Bank Transfer"}
-                              </Badge>
-                            </TableCell>
-                          </>
-                        )}
-
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setSelectedRecord(record);
-                                setIsUpdateModalOpen(true);
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setRecordToDelete({ id: record.id, type: record.type });
-                                setIsDeleteDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </div>
+                    {paginatedRecords.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={10} className="text-center py-8 text-[var(--muted-foreground)]">
+                          No records found for the selected filters
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      paginatedRecords.map((record: any) => (
+                        <TableRow key={`${record.type}-${record.id}`} className={getRowColor(record.type)}>
+                          <TableCell className="whitespace-nowrap">
+                            {format(new Date(record.dateTime), "MMM dd, yyyy hh:mm a")}
+                          </TableCell>
+
+                          {view === "all" && (
+                            <>
+                              <TableCell>
+                                <Badge variant="outline" className="capitalize">{record.type === "expenses" ? "expense" : record.type}</Badge>
+                              </TableCell>
+                              <TableCell className="max-w-[280px] truncate" title={describeRecord(record)}>
+                                {describeRecord(record)}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{formatPayment(record.paymentMethod)}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                {record.type === "expenses" ? (
+                                  <span className="font-bold text-[var(--destructive)]">
+                                    -{formatAmount(expenseTotalOf(record))}
+                                  </span>
+                                ) : (
+                                  <span className="font-semibold text-[var(--positive)]">
+                                    +{formatAmount(Number(record.totalAmount))}
+                                  </span>
+                                )}
+                              </TableCell>
+                            </>
+                          )}
+
+                          {view !== "all" && record.type === "restaurant" && (
+                            <>
+                              <TableCell>{record.customerName || "Walk-in Customer"}</TableCell>
+                              <TableCell>
+                                {record.items?.map((item: any, i: number) => (
+                                  <div key={i} className="text-sm">
+                                    {item.name} x{item.quantity}
+                                  </div>
+                                ))}
+                              </TableCell>
+                              <TableCell>{getDiscountAmount(record) > 0 ? formatAmount(getDiscountAmount(record)) : "-"}</TableCell>
+                              <TableCell>{record.taxPercent ? `${record.taxPercent}%` : "-"}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline">
+                                  {record.source === "dine_in" ? "Dine-In" : record.source === "online_order" ? "Online" : "Other"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{formatPayment(record.paymentMethod)}</Badge>
+                              </TableCell>
+                              <TableCell className="text-[var(--positive)] font-semibold">
+                                +{formatAmount(record.totalAmount)}
+                              </TableCell>
+                            </>
+                          )}
+
+                          {view !== "all" && record.type === "camping" && (
+                            <>
+                              <TableCell className="font-medium">{record.customerName}</TableCell>
+                              <TableCell>{record.numberOfCamps}</TableCell>
+                              <TableCell>{record.nights}</TableCell>
+                              <TableCell>
+                                {record.services?.length > 0 ? record.services.map((s: any) => s.name).join(", ") : "-"}
+                              </TableCell>
+                              <TableCell>{getDiscountAmount(record) > 0 ? formatAmount(getDiscountAmount(record)) : "-"}</TableCell>
+                              <TableCell>{record.taxPercent ? `${record.taxPercent}%` : "-"}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{formatPayment(record.paymentMethod)}</Badge>
+                              </TableCell>
+                              <TableCell className="text-[var(--positive)] font-semibold">
+                                +{formatAmount(record.totalAmount)}
+                              </TableCell>
+                            </>
+                          )}
+
+                          {view !== "all" && record.type === "expenses" && (
+                            <>
+                              <TableCell>{record.name}</TableCell>
+                              <TableCell>Rs. {Number(record.amount).toLocaleString()}</TableCell>
+                              <TableCell>{record.quantity || 0}</TableCell>
+                              <TableCell className="font-bold text-[var(--primary)]">
+                                Rs. {Number(record.total || (record.amount * (record.quantity || 1))).toLocaleString()}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="capitalize">{record.category}</Badge>
+                              </TableCell>
+                              <TableCell>{record.paidTo || "-"}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{formatPayment(record.paymentMethod)}</Badge>
+                              </TableCell>
+                            </>
+                          )}
+
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setSelectedRecord(record);
+                                  setIsUpdateModalOpen(true);
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setRecordToDelete({ id: record.id, type: record.type });
+                                  setIsDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </div>
 
-              {getTotalPages() > 1 && (
+              {renderTotals()}
+
+              {totalPages > 1 && (
                 <div className="flex justify-between items-center p-4 border-t">
                   <Button
                     variant="outline"
@@ -454,11 +680,11 @@ export default function SalesExpenses() {
                     <ChevronLeft className="h-4 w-4 mr-1" /> Previous
                   </Button>
                   <span className="text-sm">
-                    Page {page} of {getTotalPages()}
+                    Page {page} of {totalPages}
                   </span>
                   <Button
                     variant="outline"
-                    disabled={page === getTotalPages()}
+                    disabled={page === totalPages}
                     onClick={() => setPage(page + 1)}
                   >
                     Next <ChevronRight className="h-4 w-4 ml-1" />
@@ -495,16 +721,16 @@ export default function SalesExpenses() {
   <DialogContent className="!max-w-none w-[95vw] max-h-[90vh] overflow-y-auto">
     <DialogHeader>
       <DialogTitle>
-        Update {view === "restaurant" ? "Sale" : view === "camping" ? "Camping Sale" : "Expense"}
+        Update {selectedRecord?.type === "restaurant" ? "Sale" : selectedRecord?.type === "camping" ? "Camping Sale" : "Expense"}
       </DialogTitle>
     </DialogHeader>
-    {view === "restaurant" && selectedRecord && (
+    {selectedRecord?.type === "restaurant" && (
       <AddSale key={selectedRecord.id} saleToEdit={selectedRecord as any} onClose={() => setIsUpdateModalOpen(false)} />
     )}
-    {view === "camping" && selectedRecord && (
+    {selectedRecord?.type === "camping" && (
       <AddCampingSale key={selectedRecord.id} campingSaleToEdit={selectedRecord as any} onClose={() => setIsUpdateModalOpen(false)} />
     )}
-    {view === "expenses" && selectedRecord && (
+    {selectedRecord?.type === "expenses" && (
       <AddExpense key={selectedRecord.id} expenseToEdit={selectedRecord as any} onClose={() => setIsUpdateModalOpen(false)} />
     )}
   </DialogContent>
