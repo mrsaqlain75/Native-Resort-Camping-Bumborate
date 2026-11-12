@@ -14,6 +14,7 @@ import SalesExpenses from '@/pages/reports/SalesExpenses';
 import IncomePage from '@/pages/analysis/IncomePage'
 import ExpensesPage from '@/pages/analysis/ExpensesPage'
 import BackupRestore from '@/pages/data/BackupRestore';
+import VendorsPage from '@/pages/vendors/VendorsPage';
 
 function AppRoutes() {
   const { user, isLoading } = useAuth({ redirectOnUnauthenticated: true })
@@ -38,6 +39,7 @@ function AppRoutes() {
         <Route path="/sales/add" element={<AddSale />} />
         <Route path="/expenses/add" element={<AddExpense />} />
         <Route path="/menu" element={<MenuPage />} />
+        <Route path="/vendors" element={<VendorsPage />} />
         <Route path="/reports/today" element={<TodayReport />} />
         <Route path="/sales-expenses" element={<SalesExpenses />} />
         <Route path="/reports" element={<ReportsHub />} />

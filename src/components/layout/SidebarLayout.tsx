@@ -25,7 +25,8 @@ import {
   ChevronRight,
   Menu,
   Download,
-  Database
+  Database,
+  Truck
 } from "lucide-react";
 
 interface SidebarLayoutProps {
@@ -37,6 +38,7 @@ const restaurantItems = [
   { path: "/sales/add", label: "Add Sale", icon: Receipt },
   { path: "/expenses/add", label: "Add Expense", icon: DollarSign },
   { path: "/menu", label: "Menu Management", icon: Utensils },
+  { path: "/vendors", label: "Vendors", icon: Truck },
 ];
 
 

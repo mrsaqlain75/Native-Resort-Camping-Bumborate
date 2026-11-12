@@ -9,7 +9,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, Plus, Trash2, User, Package } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+import { DollarSign, Plus, Trash2, User, Package, ChevronsUpDown, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { uploadSignedToCloudinary } from "@/lib/cloudinary";
 
@@ -21,7 +31,7 @@ const expenseItemSchema = z.object({
 });
 
 const expenseFormSchema = z.object({
-  vendorName: z.string().optional(),
+  vendorName: z.string().min(1, "Select a vendor"),
   category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
   items: z.array(expenseItemSchema).min(1, "At least one expense item is required"),
   paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
@@ -83,6 +93,15 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     control,
     name: "items",
   });
+
+  // ── Vendor picker (searchable list of vendors from the Vendors page) ──
+  const [vendorOpen, setVendorOpen] = useState(false);
+  const [vendorSearch, setVendorSearch] = useState("");
+  const { data: vendors } = trpc.vendors.list.useQuery();
+  const selectedVendorName = watch("vendorName");
+  const filteredVendors = (vendors ?? []).filter((v) =>
+    v.name.toLowerCase().includes(vendorSearch.trim().toLowerCase())
+  );
 
   useEffect(() => {
     if (expenseToEdit) {
@@ -223,17 +242,85 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
             {/* Vendor Name and Category - Global fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
-                <Label htmlFor="vendorName" className="flex items-center gap-2">
+                <Label className="flex items-center gap-2">
                   <User className="h-4 w-4" />
-                  Vendor Name
+                  Vendor
                 </Label>
-                <Input
-                  id="vendorName"
-                  {...register("vendorName")}
-                  placeholder="Vendor name (optional)"
-                />
+                <Popover open={vendorOpen} onOpenChange={setVendorOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={vendorOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      <span className={cn("truncate", !selectedVendorName && "text-[var(--muted-foreground)]")}>
+                        {selectedVendorName || "Select vendor..."}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[--radix-popover-trigger-width] p-0"
+                    align="start"
+                  >
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Search vendor..."
+                        value={vendorSearch}
+                        onValueChange={setVendorSearch}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          No vendor found. Add vendors on the Vendors page.
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {filteredVendors.map((vendor) => (
+                            <CommandItem
+                              key={vendor.id}
+                              value={vendor.name}
+                              onSelect={() => {
+                                setValue("vendorName", vendor.name, { shouldValidate: true });
+                                setVendorOpen(false);
+                                setVendorSearch("");
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 shrink-0",
+                                  selectedVendorName === vendor.name ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <span className="truncate">{vendor.name}</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                        {selectedVendorName && (
+                          <CommandGroup>
+                            <CommandItem
+                              onSelect={() => {
+                                setValue("vendorName", "", { shouldValidate: true });
+                                setVendorOpen(false);
+                                setVendorSearch("");
+                              }}
+                            >
+                              <X className="mr-2 h-4 w-4" />
+                              Clear selection
+                            </CommandItem>
+                          </CommandGroup>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {errors.vendorName && (
+                  <p className="text-sm text-[var(--destructive)] mt-1">
+                    {errors.vendorName.message}
+                  </p>
+                )}
                 <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                  This name will apply to all expenses
+                  This vendor will apply to all expenses
                 </p>
               </div>
               <div>

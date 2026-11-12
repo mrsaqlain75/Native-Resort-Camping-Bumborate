@@ -91,7 +91,8 @@ __export(schema_exports, {
   sales: () => sales,
   salesSourceEnum: () => salesSourceEnum,
   userRoleEnum: () => userRoleEnum,
-  users: () => users
+  users: () => users,
+  vendors: () => vendors
 });
 import {
   pgTable,
@@ -197,6 +198,13 @@ var campingSales = pgTable("camping_sales", {
   dateTime: timestamp("date_time", { mode: "date" }).notNull(),
   note: text("note"),
   createdBy: integer("created_by").notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull()
+});
+var vendors = pgTable("vendors", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull().unique(),
+  phone: varchar("phone", { length: 32 }),
+  note: text("note"),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull()
 });
 
@@ -1493,6 +1501,7 @@ import { sql as sql5 } from "drizzle-orm";
 var TABLES = [
   { name: "users", table: users, dateFields: ["createdAt", "updatedAt", "lastSignInAt"] },
   { name: "menu_items", table: menuItems, dateFields: ["createdAt", "updatedAt"] },
+  { name: "vendors", table: vendors, dateFields: ["createdAt"] },
   { name: "sales", table: sales, dateFields: ["dateTime", "createdAt"] },
   { name: "expenses", table: expenses, dateFields: ["dateTime", "createdAt"] },
   {
@@ -1629,6 +1638,36 @@ var cloudinaryRouter = createRouter({
   })
 });
 
+// server/vendors-router.ts
+import { z as z9 } from "zod";
+import { asc, eq as eq6 } from "drizzle-orm";
+var vendorsRouter = createRouter({
+  list: authedQuery.query(async () => {
+    const db = getDb();
+    return db.select().from(vendors).orderBy(asc(vendors.name));
+  }),
+  create: authedQuery.input(
+    z9.object({
+      name: z9.string().trim().min(1).max(255),
+      phone: z9.string().trim().max(32).optional(),
+      note: z9.string().trim().optional()
+    })
+  ).mutation(async ({ input }) => {
+    const db = getDb();
+    const inserted = await db.insert(vendors).values({
+      name: input.name,
+      phone: input.phone || null,
+      note: input.note || null
+    }).onConflictDoNothing({ target: vendors.name }).returning({ id: vendors.id });
+    return { id: inserted[0]?.id ?? null, success: true };
+  }),
+  delete: authedQuery.input(z9.object({ id: z9.number() })).mutation(async ({ input }) => {
+    const db = getDb();
+    await db.delete(vendors).where(eq6(vendors.id, input.id));
+    return { success: true };
+  })
+});
+
 // server/router.ts
 var appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -1639,7 +1678,8 @@ var appRouter = createRouter({
   camping: campingRouter,
   reports: reportsRouter,
   data: dataRouter,
-  cloudinary: cloudinaryRouter
+  cloudinary: cloudinaryRouter,
+  vendors: vendorsRouter
 });
 
 // server/lib/jwt-auth.ts

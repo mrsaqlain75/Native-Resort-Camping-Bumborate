@@ -141,3 +141,15 @@ export const campingSales = pgTable("camping_sales", {
 
 export type CampingSale = typeof campingSales.$inferSelect;
 export type InsertCampingSale = typeof campingSales.$inferInsert;
+
+// ========== VENDORS TABLE (payees selectable on the expense form) ==========
+export const vendors = pgTable("vendors", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull().unique(),
+  phone: varchar("phone", { length: 32 }),
+  note: text("note"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export type Vendor = typeof vendors.$inferSelect;
+export type InsertVendor = typeof vendors.$inferInsert;

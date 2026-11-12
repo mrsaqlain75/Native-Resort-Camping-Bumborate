@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 const TABLES = [
   { name: "users", table: schema.users, dateFields: ["createdAt", "updatedAt", "lastSignInAt"] },
   { name: "menu_items", table: schema.menuItems, dateFields: ["createdAt", "updatedAt"] },
+  { name: "vendors", table: schema.vendors, dateFields: ["createdAt"] },
   { name: "sales", table: schema.sales, dateFields: ["dateTime", "createdAt"] },
   { name: "expenses", table: schema.expenses, dateFields: ["dateTime", "createdAt"] },
   {
