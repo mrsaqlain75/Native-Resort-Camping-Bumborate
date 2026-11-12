@@ -16,6 +16,11 @@ const TABLES = [
     table: schema.campingSales,
     dateFields: ["checkIn", "checkOut", "dateTime", "createdAt"],
   },
+  {
+    name: "vendor_payments",
+    table: schema.vendorPayments,
+    dateFields: ["dateTime", "createdAt"],
+  },
 ] as const;
 
 function reviveDates(row: Record<string, unknown>, dateFields: readonly string[]) {

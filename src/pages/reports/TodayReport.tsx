@@ -119,7 +119,7 @@ export default function TodayReport() {
                     <TableRow key={`e-${e.id}`}>
                       <TableCell className="text-xs">Expense</TableCell>
                       <TableCell className="text-xs text-[var(--negative)]">-Rs. {Number(e.total ?? e.amount).toLocaleString()}</TableCell>
-                      <TableCell className="text-xs">{e.paymentMethod}</TableCell>
+                      <TableCell className="text-xs">{e.paymentMethod ?? "—"}</TableCell>
                     </TableRow>
                   ))}
                   {camping?.map((c) => (

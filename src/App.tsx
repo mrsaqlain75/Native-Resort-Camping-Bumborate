@@ -5,6 +5,7 @@ import Login from '@/pages/Login'
 import Dashboard from '@/pages/Dashboard'
 import AddSale from '@/pages/sales/AddSale'
 import AddExpense from '@/pages/expenses/AddExpense'
+import PayExpenses from '@/pages/expenses/PayExpenses'
 import MenuPage from '@/pages/menu/MenuPage'
 import ProfitLoss from '@/pages/analysis/ProfitLoss'
 import TodayReport from '@/pages/reports/TodayReport'
@@ -38,6 +39,7 @@ function AppRoutes() {
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
         <Route path="/sales/add" element={<AddSale />} />
         <Route path="/expenses/add" element={<AddExpense />} />
+        <Route path="/expenses/pay" element={<PayExpenses />} />
         <Route path="/menu" element={<MenuPage />} />
         <Route path="/vendors" element={<VendorsPage />} />
         <Route path="/reports/today" element={<TodayReport />} />

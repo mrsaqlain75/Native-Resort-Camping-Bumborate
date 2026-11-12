@@ -171,7 +171,7 @@ export default function ExpensesPage() {
                           <TableCell className="font-medium">{e.name}</TableCell>
                           <TableCell><span className="px-2 py-1 rounded-full text-xs bg-[var(--muted)]">{e.category}</span></TableCell>
                           <TableCell className="text-xs">{format(new Date(e.dateTime), "MMM dd, yyyy")}</TableCell>
-                          <TableCell className="text-xs">{e.paymentMethod}</TableCell>
+                          <TableCell className="text-xs">{e.paymentMethod ?? "—"}</TableCell>
                           <TableCell className="text-right font-semibold text-[var(--negative)]">Rs. {Number(e.total ?? 0).toLocaleString()}</TableCell>
                         </TableRow>
                       ))}

@@ -287,7 +287,7 @@ export default function SalesExpenses() {
   };
 
   const formatPayment = (method: string) =>
-    method === "cash" ? "Cash" : method === "e_transaction" ? "E-Transaction" : "Bank Transfer";
+    !method ? "—" : method === "cash" ? "Cash" : method === "e_transaction" ? "E-Transaction" : "Bank Transfer";
 
   const selectVendor = (vendor: string) => {
     setSelectedVendor(vendor);

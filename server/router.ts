@@ -8,6 +8,7 @@ import { createRouter, publicQuery } from "./middleware.js";
 import { dataRouter } from "./data-router.js";
 import { cloudinaryRouter } from "./cloudinary-router.js";
 import { vendorsRouter } from "./vendors-router.js";
+import { vendorPaymentsRouter } from "./vendor-payments-router.js";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -20,6 +21,7 @@ export const appRouter = createRouter({
   data: dataRouter,
   cloudinary: cloudinaryRouter,
   vendors: vendorsRouter,
+  vendorPayments: vendorPaymentsRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
   CommandEmpty,
@@ -18,10 +17,10 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { DollarSign, Plus, Trash2, User, Package, ChevronsUpDown, Check, X } from "lucide-react";
 import { toast } from "sonner";
-import { uploadSignedToCloudinary } from "@/lib/cloudinary";
 
 const expenseItemSchema = z.object({
   name: z.string().min(1, "Expense name is required"),
@@ -30,12 +29,12 @@ const expenseItemSchema = z.object({
   total: z.number(),
 });
 
+// Payment method / date / receipt are intentionally absent: expenses are
+// recorded here and settled later on the Pay Expenses page.
 const expenseFormSchema = z.object({
   vendorName: z.string().min(1, "Select a vendor"),
   category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
   items: z.array(expenseItemSchema).min(1, "At least one expense item is required"),
-  paymentMethod: z.enum(["cash", "e_transaction", "bank_transfer"]),
-  dateTime: z.string(),
   note: z.string().optional(),
 });
 
@@ -51,12 +50,6 @@ const categories = [
   { value: "other", label: "Other" },
 ];
 
-const paymentMethods = [
-  { value: "cash", label: "Cash" },
-  { value: "e_transaction", label: "E-Transaction" },
-  { value: "bank_transfer", label: "Bank Transfer" },
-];
-
 interface AddExpenseProps {
   expenseToEdit?: any;
   onClose?: () => void;
@@ -65,9 +58,6 @@ interface AddExpenseProps {
 export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) {
   const isEditMode = !!expenseToEdit;
   const utils = trpc.useUtils();
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const signUpload = trpc.cloudinary.signUpload.useMutation();
 
   const {
     control,
@@ -83,8 +73,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
       vendorName: "",
       category: "other",
       items: [{ name: "", unitPrice: 0, quantity: 0, total: 0 }],
-      paymentMethod: "cash",
-      dateTime: new Date().toISOString().slice(0, 16),
       note: "",
     },
   });
@@ -113,13 +101,8 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         quantity: expenseToEdit.quantity || 0,
         total: expenseToEdit.total || (expenseToEdit.amount * (expenseToEdit.quantity || 1)),
       }]);
-      setValue("paymentMethod", expenseToEdit.paymentMethod);
-      const dateTimeValue = expenseToEdit.dateTime 
-        ? typeof expenseToEdit.dateTime === "string" 
-          ? expenseToEdit.dateTime.slice(0, 16) 
-          : new Date(expenseToEdit.dateTime).toISOString().slice(0, 16)
-        : new Date().toISOString().slice(0, 16);
-      setValue("dateTime", dateTimeValue);
+      // dateTime and paymentMethod are intentionally not set on the form:
+      // editing preserves the expense's existing values on the server.
       setValue("note", expenseToEdit.note || "");
     }
   }, [expenseToEdit, setValue]);
@@ -149,7 +132,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
       utils.reports.dashboardSummary.invalidate();
       utils.reports.recentActivity.invalidate();
       reset();
-      setReceiptFile(null);
       if (onClose) onClose();
     },
     onError: (err) => toast.error(err.message),
@@ -165,29 +147,16 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
     onError: (err) => toast.error(err.message),
   });
 
-  const onSubmit = async (data: ExpenseForm) => {
-    // Preserve any existing receipt when editing and no new file is chosen
-    let receiptUrlValue: string | undefined =
+  const onSubmit = (data: ExpenseForm) => {
+    // Editing preserves the expense's existing receipt, date/time and payment
+    // method; only the fields on this form are changed.
+    const receiptUrlValue: string | undefined =
       isEditMode && expenseToEdit
         ? expenseToEdit.receiptUrl || undefined
         : undefined;
-
-    if (receiptFile) {
-      try {
-        setIsUploading(true);
-        const sig = await signUpload.mutateAsync({
-          folder: "native-resort/expense-receipts",
-        });
-        receiptUrlValue = await uploadSignedToCloudinary(receiptFile, sig);
-      } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : "Receipt upload failed"
-        );
-        return;
-      } finally {
-        setIsUploading(false);
-      }
-    }
+    const dateTimeValue = isEditMode && expenseToEdit
+      ? new Date(expenseToEdit.dateTime).toISOString()
+      : new Date().toISOString();
 
     if (isEditMode && expenseToEdit) {
       const item = data.items[0];
@@ -198,10 +167,9 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         quantity: item.quantity || 0,
         total: item.total || item.unitPrice * (item.quantity || 0),
         category: data.category,
-        paymentMethod: data.paymentMethod,
         paidTo: data.vendorName || null,
         receiptUrl: receiptUrlValue,
-        dateTime: data.dateTime,
+        dateTime: dateTimeValue,
         note: data.note,
       });
     } else {
@@ -211,10 +179,9 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         quantity: item.quantity || 0,
         total: item.total || item.unitPrice * (item.quantity || 0),
         category: data.category,
-        paymentMethod: data.paymentMethod,
         paidTo: data.vendorName || null,
         receiptUrl: receiptUrlValue,
-        dateTime: data.dateTime,
+        dateTime: dateTimeValue,
         note: data.note,
       }));
       createMultipleExpenses.mutate({ expenses });
@@ -442,48 +409,6 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
-                <Label>Payment Method</Label>
-                <Select
-                  value={watch("paymentMethod")}
-                  onValueChange={(v) => setValue("paymentMethod", v as any)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select payment method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {paymentMethods.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="dateTime">Date & Time</Label>
-                <Input type="datetime-local" id="dateTime" {...register("dateTime")} />
-              </div>
-            </div>
-
-            {!isEditMode && (
-              <div>
-                <Label htmlFor="receipt">Upload Receipt (Optional)</Label>
-                <Input
-                  id="receipt"
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-                />
-                {receiptFile && (
-                  <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                    Selected: {receiptFile.name}
-                  </p>
-                )}
-              </div>
-            )}
-
             <div>
               <Label htmlFor="note">Note / Remarks (Optional)</Label>
               <Textarea id="note" {...register("note")} rows={3} />
@@ -494,14 +419,11 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                 type="submit"
                 className="flex-1"
                 disabled={
-                  isUploading ||
                   createMultipleExpenses.isPending ||
                   updateExpense.isPending
                 }
               >
-                {isUploading
-                  ? "Uploading receipt..."
-                  : createMultipleExpenses.isPending || updateExpense.isPending
+                {createMultipleExpenses.isPending || updateExpense.isPending
                   ? "Saving..."
                   : isEditMode
                   ? "Update Expense"

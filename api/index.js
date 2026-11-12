@@ -92,6 +92,7 @@ __export(schema_exports, {
   salesSourceEnum: () => salesSourceEnum,
   userRoleEnum: () => userRoleEnum,
   users: () => users,
+  vendorPayments: () => vendorPayments,
   vendors: () => vendors
 });
 import {
@@ -171,7 +172,7 @@ var expenses = pgTable("expenses", {
   total: numeric("total", { precision: 12, scale: 2 }).default("0"),
   // Total = amount × quantity
   category: expenseCategoryEnum("category").notNull(),
-  paymentMethod: expensePaymentMethodEnum("payment_method").notNull(),
+  paymentMethod: expensePaymentMethodEnum("payment_method"),
   paidTo: varchar("paid_to", { length: 255 }),
   receiptUrl: text("receipt_url"),
   dateTime: timestamp("date_time", { mode: "date" }).notNull(),
@@ -205,6 +206,15 @@ var vendors = pgTable("vendors", {
   name: varchar("name", { length: 255 }).notNull().unique(),
   phone: varchar("phone", { length: 32 }),
   note: text("note"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull()
+});
+var vendorPayments = pgTable("vendor_payments", {
+  id: serial("id").primaryKey(),
+  vendorName: varchar("vendor_name", { length: 255 }).notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  dateTime: timestamp("date_time", { mode: "date" }).notNull(),
+  note: text("note"),
+  createdBy: integer("created_by").notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull()
 });
 
@@ -786,7 +796,9 @@ var expensesRouter = createRouter({
         "rent",
         "other"
       ]),
-      paymentMethod: z5.enum(["cash", "e_transaction", "bank_transfer"]),
+      // Optional: the expense form no longer records payment info; payment
+      // is settled separately via vendorPayments.
+      paymentMethod: z5.enum(["cash", "e_transaction", "bank_transfer"]).optional(),
       paidTo: z5.string().optional(),
       receiptUrl: z5.string().optional(),
       dateTime: z5.string(),
@@ -800,7 +812,7 @@ var expensesRouter = createRouter({
       quantity: input.quantity || 0,
       total: input.total.toFixed(2),
       category: input.category,
-      paymentMethod: input.paymentMethod,
+      paymentMethod: input.paymentMethod ?? null,
       paidTo: input.paidTo || null,
       receiptUrl: input.receiptUrl || null,
       dateTime: new Date(input.dateTime),
@@ -826,7 +838,7 @@ var expensesRouter = createRouter({
             "rent",
             "other"
           ]),
-          paymentMethod: z5.enum(["cash", "e_transaction", "bank_transfer"]),
+          paymentMethod: z5.enum(["cash", "e_transaction", "bank_transfer"]).optional(),
           paidTo: z5.string().optional().nullable(),
           receiptUrl: z5.string().optional(),
           dateTime: z5.string(),
@@ -843,7 +855,7 @@ var expensesRouter = createRouter({
         quantity: expense.quantity || 0,
         total: expense.total.toString(),
         category: expense.category,
-        paymentMethod: expense.paymentMethod,
+        paymentMethod: expense.paymentMethod ?? null,
         paidTo: expense.paidTo || null,
         receiptUrl: expense.receiptUrl || null,
         dateTime: new Date(expense.dateTime),
@@ -869,7 +881,7 @@ var expensesRouter = createRouter({
         "rent",
         "other"
       ]),
-      paymentMethod: z5.enum(["cash", "e_transaction", "bank_transfer"]),
+      paymentMethod: z5.enum(["cash", "e_transaction", "bank_transfer"]).optional(),
       paidTo: z5.string().nullable().optional(),
       receiptUrl: z5.string().nullable().optional(),
       dateTime: z5.string(),
@@ -884,7 +896,9 @@ var expensesRouter = createRouter({
       quantity: input.quantity || 0,
       total: total.toString(),
       category: input.category,
-      paymentMethod: input.paymentMethod,
+      // Only overwrite when explicitly provided — editing an old expense
+      // from the new form must not wipe its recorded payment method.
+      paymentMethod: input.paymentMethod === void 0 ? void 0 : input.paymentMethod ?? null,
       paidTo: input.paidTo || null,
       receiptUrl: input.receiptUrl || null,
       dateTime: new Date(input.dateTime),
@@ -1508,6 +1522,11 @@ var TABLES = [
     name: "camping_sales",
     table: campingSales,
     dateFields: ["checkIn", "checkOut", "dateTime", "createdAt"]
+  },
+  {
+    name: "vendor_payments",
+    table: vendorPayments,
+    dateFields: ["dateTime", "createdAt"]
   }
 ];
 function reviveDates(row, dateFields) {
@@ -1668,6 +1687,100 @@ var vendorsRouter = createRouter({
   })
 });
 
+// server/vendor-payments-router.ts
+import { z as z10 } from "zod";
+import { TRPCError as TRPCError4 } from "@trpc/server";
+import { sql as sql6, eq as eq7, desc as desc6, isNotNull } from "drizzle-orm";
+var vendorPaymentsRouter = createRouter({
+  // Per-vendor ledger: recorded expenses vs. payments actually made.
+  list: authedQuery.query(async () => {
+    const db = getDb();
+    return db.select().from(vendorPayments).orderBy(desc6(vendorPayments.dateTime));
+  }),
+  summary: authedQuery.query(async () => {
+    const db = getDb();
+    const vendorRows = await db.select({ name: vendors.name }).from(vendors);
+    const vendorNames = new Set(vendorRows.map((v) => v.name));
+    const expenseRows = await db.select({
+      vendor: expenses.paidTo,
+      total: sql6`COALESCE(SUM(${expenses.total}), 0)::float`,
+      count: sql6`COUNT(*)::int`
+    }).from(expenses).where(isNotNull(expenses.paidTo)).groupBy(expenses.paidTo);
+    const paymentRows = await db.select({
+      vendor: vendorPayments.vendorName,
+      total: sql6`COALESCE(SUM(${vendorPayments.amount}), 0)::float`,
+      count: sql6`COUNT(*)::int`
+    }).from(vendorPayments).groupBy(vendorPayments.vendorName);
+    const byVendor = /* @__PURE__ */ new Map();
+    for (const row of expenseRows) {
+      if (!row.vendor || !vendorNames.has(row.vendor)) continue;
+      byVendor.set(row.vendor, {
+        vendor: row.vendor,
+        expensesTotal: Number(row.total ?? 0),
+        expensesCount: Number(row.count ?? 0),
+        paidTotal: 0,
+        paymentsCount: 0,
+        remaining: 0
+      });
+    }
+    for (const row of paymentRows) {
+      const entry = byVendor.get(row.vendor) ?? {
+        vendor: row.vendor,
+        expensesTotal: 0,
+        expensesCount: 0,
+        paidTotal: 0,
+        paymentsCount: 0,
+        remaining: 0
+      };
+      entry.paidTotal = Number(row.total ?? 0);
+      entry.paymentsCount = Number(row.count ?? 0);
+      byVendor.set(row.vendor, entry);
+    }
+    const list = [...byVendor.values()].map((entry) => ({
+      ...entry,
+      remaining: Math.round((entry.expensesTotal - entry.paidTotal) * 100) / 100
+    }));
+    list.sort((a, b) => b.remaining - a.remaining);
+    return list;
+  }),
+  create: authedQuery.input(
+    z10.object({
+      vendorName: z10.string().trim().min(1).max(255),
+      amount: z10.number().positive(),
+      dateTime: z10.string().optional(),
+      note: z10.string().trim().optional()
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const db = getDb();
+    const [expenseAgg] = await db.select({
+      total: sql6`COALESCE(SUM(${expenses.total}), 0)::float`
+    }).from(expenses).where(eq7(expenses.paidTo, input.vendorName));
+    const [paidAgg] = await db.select({
+      total: sql6`COALESCE(SUM(${vendorPayments.amount}), 0)::float`
+    }).from(vendorPayments).where(eq7(vendorPayments.vendorName, input.vendorName));
+    const remaining = Math.round((Number(expenseAgg?.total ?? 0) - Number(paidAgg?.total ?? 0)) * 100) / 100;
+    if (input.amount > remaining + 0.01) {
+      throw new TRPCError4({
+        code: "BAD_REQUEST",
+        message: `Amount exceeds the remaining payable (${remaining}) for this vendor`
+      });
+    }
+    const [row] = await db.insert(vendorPayments).values({
+      vendorName: input.vendorName,
+      amount: input.amount.toFixed(2),
+      dateTime: input.dateTime ? new Date(input.dateTime) : /* @__PURE__ */ new Date(),
+      note: input.note || null,
+      createdBy: ctx.user.id
+    }).returning({ id: vendorPayments.id });
+    return { id: row.id, success: true };
+  }),
+  delete: authedQuery.input(z10.object({ id: z10.number() })).mutation(async ({ input }) => {
+    const db = getDb();
+    await db.delete(vendorPayments).where(eq7(vendorPayments.id, input.id));
+    return { success: true };
+  })
+});
+
 // server/router.ts
 var appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -1679,7 +1792,8 @@ var appRouter = createRouter({
   reports: reportsRouter,
   data: dataRouter,
   cloudinary: cloudinaryRouter,
-  vendors: vendorsRouter
+  vendors: vendorsRouter,
+  vendorPayments: vendorPaymentsRouter
 });
 
 // server/lib/jwt-auth.ts

@@ -102,7 +102,7 @@ export const expenses = pgTable("expenses", {
   quantity: integer("quantity").default(0), // Quantity
   total: numeric("total", { precision: 12, scale: 2 }).default("0"), // Total = amount × quantity
   category: expenseCategoryEnum("category").notNull(),
-  paymentMethod: expensePaymentMethodEnum("payment_method").notNull(),
+  paymentMethod: expensePaymentMethodEnum("payment_method"),
   paidTo: varchar("paid_to", { length: 255 }),
   receiptUrl: text("receipt_url"),
   dateTime: timestamp("date_time", { mode: "date" }).notNull(),
@@ -153,3 +153,19 @@ export const vendors = pgTable("vendors", {
 
 export type Vendor = typeof vendors.$inferSelect;
 export type InsertVendor = typeof vendors.$inferInsert;
+
+// ========== VENDOR PAYMENTS (settlements made on the Pay Expenses page) ==========
+// A ledger of amounts actually paid to a vendor. A vendor's remaining payable
+// = SUM(expenses.paid_to = vendor) - SUM(vendor_payments.vendor_name = vendor).
+export const vendorPayments = pgTable("vendor_payments", {
+  id: serial("id").primaryKey(),
+  vendorName: varchar("vendor_name", { length: 255 }).notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  dateTime: timestamp("date_time", { mode: "date" }).notNull(),
+  note: text("note"),
+  createdBy: integer("created_by").notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export type VendorPayment = typeof vendorPayments.$inferSelect;
+export type InsertVendorPayment = typeof vendorPayments.$inferInsert;

@@ -8,6 +8,7 @@ import {
   Receipt,
   Tent,
   Activity,
+  HandCoins,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -74,6 +75,10 @@ export default function Dashboard() {
 
   const { data: summary } = trpc.reports.dashboardSummary.useQuery();
   const { data: recent } = trpc.reports.recentActivity.useQuery();
+  const { data: payables } = trpc.vendorPayments.summary.useQuery();
+
+  const outstandingPayables = (payables || []).filter((p) => p.remaining > 0.005);
+  const totalOutstanding = outstandingPayables.reduce((sum, p) => sum + p.remaining, 0);
 
   const today = new Date();
   const startOfWeek = new Date(today);
@@ -237,6 +242,56 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Vendor Payables */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between gap-2 font-serif text-lg">
+            <span className="flex items-center gap-2">
+              <HandCoins className="h-5 w-5 text-[var(--primary)]" />
+              Vendor Payables
+            </span>
+            {totalOutstanding > 0 && (
+              <span className="text-sm font-bold text-[var(--destructive)]">
+                Outstanding: Rs. {totalOutstanding.toLocaleString()}
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!payables ? null : outstandingPayables.length === 0 ? (
+            <p className="py-2 text-sm text-[var(--muted-foreground)]">
+              All vendors are fully settled.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {outstandingPayables.map((payable) => (
+                <div
+                  key={payable.vendor}
+                  className="flex items-center justify-between border-b border-[var(--border)] py-3 last:border-0"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-9 w-9 place-items-center rounded-full bg-[var(--destructive)]/10">
+                      <HandCoins className="h-4 w-4 text-[var(--destructive)]" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{payable.vendor}</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        {payable.expensesCount} expense{payable.expensesCount === 1 ? "" : "s"} ·
+                        paid Rs. {payable.paidTotal.toLocaleString()} of Rs.{" "}
+                        {payable.expensesTotal.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-sm font-semibold text-[var(--destructive)]">
+                    -Rs. {payable.remaining.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Recent Activity */}
       <Card className="shadow-card">
