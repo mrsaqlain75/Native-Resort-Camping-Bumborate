@@ -29,12 +29,14 @@ const expenseItemSchema = z.object({
   total: z.number(),
 });
 
-// Payment method / date / receipt are intentionally absent: expenses are
-// recorded here and settled later on the Pay Expenses page.
+// Payment method and receipt are intentionally absent: the expense date is
+// recorded here, and payment is settled later on the Pay Expenses page
+// (which has its own payment date).
 const expenseFormSchema = z.object({
   vendorName: z.string().min(1, "Select a vendor"),
   category: z.enum(["food", "supplies", "utilities", "staff", "maintenance", "rent", "other"]),
   items: z.array(expenseItemSchema).min(1, "At least one expense item is required"),
+  dateTime: z.string(),
   note: z.string().optional(),
 });
 
@@ -73,6 +75,7 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
       vendorName: "",
       category: "other",
       items: [{ name: "", unitPrice: 0, quantity: 0, total: 0 }],
+      dateTime: new Date().toISOString().slice(0, 16),
       note: "",
     },
   });
@@ -101,8 +104,13 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         quantity: expenseToEdit.quantity || 0,
         total: expenseToEdit.total || (expenseToEdit.amount * (expenseToEdit.quantity || 1)),
       }]);
-      // dateTime and paymentMethod are intentionally not set on the form:
-      // editing preserves the expense's existing values on the server.
+      // paymentMethod is intentionally not set on the form: editing preserves
+      // the expense's existing payment method on the server.
+      setValue("dateTime", expenseToEdit.dateTime
+        ? typeof expenseToEdit.dateTime === "string"
+          ? expenseToEdit.dateTime.slice(0, 16)
+          : new Date(expenseToEdit.dateTime).toISOString().slice(0, 16)
+        : new Date().toISOString().slice(0, 16));
       setValue("note", expenseToEdit.note || "");
     }
   }, [expenseToEdit, setValue]);
@@ -148,15 +156,13 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
   });
 
   const onSubmit = (data: ExpenseForm) => {
-    // Editing preserves the expense's existing receipt, date/time and payment
-    // method; only the fields on this form are changed.
+    // Editing preserves the expense's existing receipt and payment method;
+    // the expense date comes from the form's Date & Time field.
     const receiptUrlValue: string | undefined =
       isEditMode && expenseToEdit
         ? expenseToEdit.receiptUrl || undefined
         : undefined;
-    const dateTimeValue = isEditMode && expenseToEdit
-      ? new Date(expenseToEdit.dateTime).toISOString()
-      : new Date().toISOString();
+    const dateTimeValue = new Date(data.dateTime).toISOString();
 
     if (isEditMode && expenseToEdit) {
       const item = data.items[0];
@@ -408,6 +414,11 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                 </div>
               </div>
             )}
+
+            <div>
+              <Label htmlFor="dateTime">Date & Time</Label>
+              <Input type="datetime-local" id="dateTime" {...register("dateTime")} />
+            </div>
 
             <div>
               <Label htmlFor="note">Note / Remarks (Optional)</Label>
