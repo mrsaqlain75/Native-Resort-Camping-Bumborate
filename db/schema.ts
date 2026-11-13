@@ -161,6 +161,8 @@ export const vendorPayments = pgTable("vendor_payments", {
   id: serial("id").primaryKey(),
   vendorName: varchar("vendor_name", { length: 255 }).notNull(),
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  // "cash" | "online" — chosen in the pay modal; older rows may be null.
+  paymentMethod: varchar("payment_method", { length: 20 }),
   dateTime: timestamp("date_time", { mode: "date" }).notNull(),
   note: text("note"),
   createdBy: integer("created_by").notNull(),

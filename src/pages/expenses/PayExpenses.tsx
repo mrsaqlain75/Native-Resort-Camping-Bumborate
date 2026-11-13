@@ -1,10 +1,8 @@
 import { useState } from "react";
+import { addMonths, format } from "date-fns";
 import { trpc } from "@/providers/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -13,83 +11,52 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Banknote, HandCoins } from "lucide-react";
-import { toast } from "sonner";
+import { Banknote, ChevronLeft, ChevronRight, HandCoins } from "lucide-react";
+import PayVendorModal from "@/components/payments/PayVendorModal";
 
 const formatAmount = (amount: number) => `Rs. ${Number(amount || 0).toLocaleString()}`;
 
 export default function PayExpenses() {
-  const utils = trpc.useUtils();
+  // Month navigator — defaults to the current month.
+  const [viewMonthDate, setViewMonthDate] = useState(() => new Date());
+  const viewMonth = format(viewMonthDate, "yyyy-MM");
+  const currentMonth = format(new Date(), "yyyy-MM");
+  const canGoForward = viewMonth < currentMonth;
 
-  const { data: payables, isLoading } = trpc.vendorPayments.summary.useQuery();
-
-  const [payModalOpen, setPayModalOpen] = useState(false);
-  const [payVendor, setPayVendor] = useState<{
-    vendor: string;
-    remaining: number;
-  } | null>(null);
-  const [amount, setAmount] = useState("");
-  const [dateTime, setDateTime] = useState("");
-  const [note, setNote] = useState("");
-  const [amountError, setAmountError] = useState("");
-
-  const openPayModal = (vendor: string, remaining: number) => {
-    setPayVendor({ vendor, remaining });
-    setAmount(remaining.toFixed(2));
-    setDateTime(new Date().toISOString().slice(0, 16));
-    setNote("");
-    setAmountError("");
-    setPayModalOpen(true);
-  };
-
-  const createPayment = trpc.vendorPayments.create.useMutation({
-    onSuccess: () => {
-      toast.success("Payment recorded successfully!");
-      utils.vendorPayments.summary.invalidate();
-      utils.vendorPayments.list.invalidate();
-      utils.reports.dashboardSummary.invalidate();
-      setPayModalOpen(false);
-      setPayVendor(null);
-    },
-    onError: (err) => toast.error(err.message),
+  const { data: payables, isLoading } = trpc.vendorPayments.monthlySummary.useQuery({
+    month: viewMonth,
   });
 
-  const handlePay = () => {
-    if (!payVendor) return;
-    const value = Number(amount);
-    if (!amount || isNaN(value) || value <= 0) {
-      setAmountError("Enter a valid amount greater than 0");
-      return;
-    }
-    if (value > payVendor.remaining + 0.001) {
-      setAmountError(`Amount cannot exceed the remaining ${formatAmount(payVendor.remaining)}`);
-      return;
-    }
-    setAmountError("");
-    createPayment.mutate({
-      vendorName: payVendor.vendor,
-      amount: value,
-      dateTime: dateTime ? new Date(dateTime).toISOString() : undefined,
-      note: note.trim() || undefined,
+  const [payVendor, setPayVendor] = useState<{
+    vendor: string;
+    monthRemaining: number;
+    totalPayable: number;
+  } | null>(null);
+  // Increments each time the pay modal opens so the shared PayVendorModal
+  // remounts with fresh state.
+  const [payModalSeq, setPayModalSeq] = useState(0);
+
+  const openPayModal = (payable: {
+    vendor: string;
+    monthRemaining: number;
+    totalPayable: number;
+  }) => {
+    setPayVendor({
+      vendor: payable.vendor,
+      monthRemaining: Math.max(payable.monthRemaining, 0),
+      totalPayable: Math.max(payable.totalPayable, 0),
     });
+    setPayModalSeq((s) => s + 1);
   };
 
   const totalOutstanding = (payables || []).reduce(
-    (sum, p) => sum + Math.max(p.remaining, 0),
+    (sum, p) => sum + Math.max(p.totalPayable, 0),
     0
   );
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold font-serif flex items-center gap-2">
@@ -101,62 +68,126 @@ export default function PayExpenses() {
           </p>
         </div>
         <Badge variant="outline" className="text-sm px-3 py-1.5">
-          Outstanding: <span className="ml-1 font-bold text-[var(--destructive)]">{formatAmount(totalOutstanding)}</span>
+          Outstanding:{" "}
+          <span className="ml-1 font-bold text-[var(--destructive)]">
+            {formatAmount(totalOutstanding)}
+          </span>
         </Badge>
+      </div>
+
+      {/* Month navigator */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Previous month"
+          onClick={() => setViewMonthDate(addMonths(viewMonthDate, -1))}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span className="min-w-[150px] text-center font-semibold font-serif">
+          {format(viewMonthDate, "MMMM yyyy")}
+        </span>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Next month"
+          disabled={!canGoForward}
+          onClick={() => setViewMonthDate(addMonths(viewMonthDate, 1))}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        {viewMonth !== currentMonth && (
+          <Button variant="ghost" size="sm" onClick={() => setViewMonthDate(new Date())}>
+            Back to This Month
+          </Button>
+        )}
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Vendor Balances</CardTitle>
+          <CardTitle className="text-lg">
+            Vendor Balances — {format(viewMonthDate, "MMMM yyyy")}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <p className="text-sm text-[var(--muted-foreground)] py-4">Loading balances...</p>
           ) : !payables || payables.length === 0 ? (
             <p className="text-sm text-[var(--muted-foreground)] py-4">
-              No vendor expenses recorded yet. Record expenses first.
+              No vendor expenses or payments recorded for this month.
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Vendor</TableHead>
-                  <TableHead>Expenses Total</TableHead>
-                  <TableHead>Paid</TableHead>
+                  <TableHead>Expenses (This Month)</TableHead>
+                  <TableHead>Paid (This Month)</TableHead>
                   <TableHead>Remaining Payable</TableHead>
+                  <TableHead>Total Payable</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {payables.map((payable) => {
-                  const remaining = Math.max(payable.remaining, 0);
-                  const settled = remaining < 0.005 && payable.expensesTotal > 0;
+                  const monthRemaining = Math.max(payable.monthRemaining, 0);
+                  const totalPayable = Math.max(payable.totalPayable, 0);
+                  const monthActive =
+                    payable.monthExpensesTotal > 0 || payable.monthPaidTotal > 0;
+                  const monthSettled =
+                    payable.monthExpensesTotal > 0 && monthRemaining < 0.005;
+                  const canPay = totalPayable >= 0.005;
                   return (
                     <TableRow key={payable.vendor}>
                       <TableCell className="font-medium">{payable.vendor}</TableCell>
                       <TableCell>
-                        {formatAmount(payable.expensesTotal)}
-                        <span className="text-xs text-[var(--muted-foreground)] ml-1">
-                          ({payable.expensesCount} expense{payable.expensesCount === 1 ? "" : "s"})
-                        </span>
+                        {payable.monthExpensesTotal > 0 ? (
+                          <>
+                            {formatAmount(payable.monthExpensesTotal)}
+                            <span className="text-xs text-[var(--muted-foreground)] ml-1">
+                              ({payable.monthExpensesCount} expense
+                              {payable.monthExpensesCount === 1 ? "" : "s"})
+                            </span>
+                          </>
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell className="text-[var(--positive)]">
-                        {payable.paidTotal > 0 ? `-${formatAmount(payable.paidTotal)}` : "—"}
+                        {payable.monthPaidTotal > 0
+                          ? `-${formatAmount(payable.monthPaidTotal)}`
+                          : "—"}
                       </TableCell>
                       <TableCell className="font-bold">
-                        {settled ? (
+                        {!monthActive ? (
+                          "—"
+                        ) : monthSettled ? (
                           <Badge className="bg-[var(--positive)]/12 text-[var(--positive)] border-[var(--positive)]/30">
                             Settled
                           </Badge>
                         ) : (
-                          <span className="text-[var(--destructive)]">{formatAmount(remaining)}</span>
+                          <span className="text-[var(--destructive)]">
+                            {formatAmount(monthRemaining)}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {totalPayable >= 0.005 ? (
+                          <span className="font-semibold text-[var(--destructive)]">
+                            {formatAmount(totalPayable)}
+                          </span>
+                        ) : (
+                          <Badge className="bg-[var(--positive)]/12 text-[var(--positive)] border-[var(--positive)]/30">
+                            Cleared
+                          </Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="sm"
-                          disabled={settled}
-                          onClick={() => openPayModal(payable.vendor, remaining)}
+                          disabled={!canPay}
+                          onClick={() => openPayModal(payable)}
                         >
                           <Banknote className="h-4 w-4 mr-1" /> Pay
                         </Button>
@@ -170,76 +201,31 @@ export default function PayExpenses() {
         </CardContent>
       </Card>
 
-      {/* Pay Modal */}
-      <Dialog open={payModalOpen} onOpenChange={(open) => {
-        setPayModalOpen(open);
-        if (!open) setPayVendor(null);
-      }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Pay {payVendor?.vendor}</DialogTitle>
-            <DialogDescription>
-              Remaining payable:{" "}
-              <span className="font-bold text-[var(--destructive)]">
-                {formatAmount(payVendor?.remaining ?? 0)}
-              </span>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="payment-amount">Amount (PKR) *</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="payment-amount"
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.00"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => payVendor && setAmount(payVendor.remaining.toFixed(2))}
-                >
-                  Pay Full
-                </Button>
-              </div>
-              {amountError && (
-                <p className="text-sm text-[var(--destructive)] mt-1">{amountError}</p>
-              )}
-            </div>
-            <div>
-              <Label htmlFor="payment-date">Date & Time</Label>
-              <Input
-                id="payment-date"
-                type="datetime-local"
-                value={dateTime}
-                onChange={(e) => setDateTime(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="payment-note">Remarks (Optional)</Label>
-              <Textarea
-                id="payment-note"
-                rows={2}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="e.g., paid via bank transfer"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPayModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handlePay} disabled={createPayment.isPending}>
-              {createPayment.isPending ? "Recording..." : "Record Payment"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Pay Modal (shared with the Add Expense "Record & Pay" flow) */}
+      {payVendor && (
+        <PayVendorModal
+          key={`${payVendor.vendor}-${payModalSeq}`}
+          onOpenChange={(open) => {
+            if (!open) setPayVendor(null);
+          }}
+          vendor={payVendor.vendor}
+          amounts={[
+            { label: "Remaining Payable (This Month)", value: payVendor.monthRemaining },
+            ...(payVendor.totalPayable > payVendor.monthRemaining + 0.005
+              ? [
+                  {
+                    label: "Total Payable (incl. previous months)",
+                    value: payVendor.totalPayable,
+                  },
+                ]
+              : []),
+          ]}
+          maxAmount={payVendor.totalPayable}
+          defaultAmount={
+            payVendor.monthRemaining > 0.005 ? payVendor.monthRemaining : payVendor.totalPayable
+          }
+        />
+      )}
     </div>
   );
 }

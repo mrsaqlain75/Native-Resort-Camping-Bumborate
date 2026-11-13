@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,8 +19,9 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { DollarSign, Plus, Trash2, User, Package, ChevronsUpDown, Check, X } from "lucide-react";
+import { DollarSign, Plus, Trash2, User, Package, ChevronsUpDown, Check, X, HandCoins } from "lucide-react";
 import { toast } from "sonner";
+import PayVendorModal from "@/components/payments/PayVendorModal";
 
 const expenseItemSchema = z.object({
   name: z.string().min(1, "Expense name is required"),
@@ -60,6 +61,15 @@ interface AddExpenseProps {
 export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) {
   const isEditMode = !!expenseToEdit;
   const utils = trpc.useUtils();
+
+  // "Record & Pay": remembers that the user chose to pay right away, so the
+  // pay modal can open once the create mutation succeeds.
+  const payNowRequested = useRef(false);
+  const payNowPayloadRef = useRef<{ vendor: string; amount: number } | null>(null);
+  const [payModal, setPayModal] = useState<{ vendor: string; amount: number } | null>(null);
+  // Increments each time the pay modal opens so the shared PayVendorModal
+  // remounts with fresh state.
+  const [payModalSeq, setPayModalSeq] = useState(0);
 
   const {
     control,
@@ -140,9 +150,21 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
       utils.reports.dashboardSummary.invalidate();
       utils.reports.recentActivity.invalidate();
       reset();
+      // Record & Pay: open the shared pay modal scoped to the newly
+      // recorded expenses' total.
+      if (payNowPayloadRef.current) {
+        if (payNowPayloadRef.current.amount > 0.005) {
+          setPayModal(payNowPayloadRef.current);
+          setPayModalSeq((s) => s + 1);
+        }
+        payNowPayloadRef.current = null;
+      }
       if (onClose) onClose();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      toast.error(err.message);
+      payNowPayloadRef.current = null;
+    },
   });
 
   const updateExpense = trpc.expenses.update.useMutation({
@@ -163,6 +185,20 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
         ? expenseToEdit.receiptUrl || undefined
         : undefined;
     const dateTimeValue = new Date(data.dateTime).toISOString();
+
+    // Record & Pay (add mode only): the pay modal is scoped to the total of
+    // the expenses being recorded right now, not the vendor's older dues.
+    payNowPayloadRef.current =
+      !isEditMode && payNowRequested.current && data.vendorName
+        ? {
+            vendor: data.vendorName,
+            amount: data.items.reduce(
+              (sum, item) => sum + (item.total || item.unitPrice * (item.quantity || 0)),
+              0
+            ),
+          }
+        : null;
+    payNowRequested.current = false;
 
     if (isEditMode && expenseToEdit) {
       const item = data.items[0];
@@ -433,6 +469,9 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                   createMultipleExpenses.isPending ||
                   updateExpense.isPending
                 }
+                onClick={() => {
+                  payNowRequested.current = false;
+                }}
               >
                 {createMultipleExpenses.isPending || updateExpense.isPending
                   ? "Saving..."
@@ -440,6 +479,20 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
                   ? "Update Expense"
                   : `Record ${fields.length} Expense${fields.length > 1 ? "s" : ""}`}
               </Button>
+              {!isEditMode && (
+                <Button
+                  type="submit"
+                  variant="outline"
+                  className="flex-1"
+                  disabled={createMultipleExpenses.isPending}
+                  onClick={() => {
+                    payNowRequested.current = true;
+                  }}
+                >
+                  <HandCoins className="h-4 w-4 mr-1" />
+                  Record &amp; Pay
+                </Button>
+              )}
               {onClose && (
                 <Button type="button" variant="outline" onClick={onClose}>
                   Cancel
@@ -454,6 +507,20 @@ export default function AddExpense({ expenseToEdit, onClose }: AddExpenseProps) 
           </form>
         </CardContent>
       </Card>
+
+      {/* Record & Pay modal — scoped to the total of the expenses just recorded */}
+      {payModal && (
+        <PayVendorModal
+          key={`${payModal.vendor}-${payModalSeq}`}
+          onOpenChange={(open) => {
+            if (!open) setPayModal(null);
+          }}
+          vendor={payModal.vendor}
+          amounts={[{ label: "Current Expenses Total", value: payModal.amount }]}
+          maxAmount={payModal.amount}
+          defaultAmount={payModal.amount}
+        />
+      )}
     </div>
   );
 }

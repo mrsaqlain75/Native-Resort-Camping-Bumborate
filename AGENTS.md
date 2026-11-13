@@ -28,7 +28,7 @@ npm run db:push      # push db/schema.ts to Postgres (uses DIRECT_URL)
 ## Architecture
 
 - `server/app.ts` is the Hono app: `/health`, `/api/health`, tRPC at `/api/trpc/*`. `server/dev.ts` is the local server; `server/vercel-entry.ts` is the Vercel handler. Keep its custom Web `Request` construction — Vercel pre-parses the body, and `@hono/node-server`'s listener hangs POSTs there.
-- Add API features as `server/<feature>-router.ts` and register them in `server/router.ts` (auth, menu, sales, expenses, camping, reports, data, cloudinary, vendors).
+- Add API features as `server/<feature>-router.ts` and register them in `server/router.ts` (auth, menu, sales, expenses, camping, reports, data, cloudinary, vendors, vendor-payments).
 - Use `publicQuery` / `authedQuery` / `adminQuery` from `server/middleware.ts`, never raw `t.procedure`. `publicQuery` retries Neon cold starts: queries retry all transient DB errors, mutations only connect-phase errors so writes are never replayed.
 - Auth is JWT via `Authorization: Bearer`; the frontend stores it in `localStorage["auth_token"]` (`src/providers/trpc.tsx`). `contracts/constants.ts` `Session.cookieName` is unused — there is no cookie auth.
 - `db/schema.ts` is the DB source of truth; `numeric` money columns are `string` in TS (cast with `Number(...)` when computing). `contracts/types.ts` re-exports schema types.
