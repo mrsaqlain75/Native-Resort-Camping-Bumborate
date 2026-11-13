@@ -26,6 +26,115 @@ export type VendorMonthlyPayable = {
   totalPayable: number;
 };
 
+// Per-vendor balances for an arbitrary [start, end) date window, plus the
+// lifetime "Total Payable" so previous months' dues stay visible. Shared by
+// monthlySummary (calendar month) and rangeSummary (custom range).
+async function buildPayableList(
+  db: ReturnType<typeof getDb>,
+  vendorNames: Set<string>,
+  start: Date,
+  end: Date
+): Promise<VendorMonthlyPayable[]> {
+  const [monthExpenseRows, monthPaymentRows, lifetimeExpenseRows, lifetimePaymentRows] =
+    await Promise.all([
+      db
+        .select({
+          vendor: schema.expenses.paidTo,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+          count: sql<number>`COUNT(*)::int`,
+        })
+        .from(schema.expenses)
+        .where(
+          and(
+            isNotNull(schema.expenses.paidTo),
+            gte(schema.expenses.dateTime, start),
+            lt(schema.expenses.dateTime, end)
+          )
+        )
+        .groupBy(schema.expenses.paidTo),
+      db
+        .select({
+          vendor: schema.vendorPayments.vendorName,
+          total: sql<number>`COALESCE(SUM(${schema.vendorPayments.amount}), 0)::float`,
+          count: sql<number>`COUNT(*)::int`,
+        })
+        .from(schema.vendorPayments)
+        .where(
+          and(
+            gte(schema.vendorPayments.dateTime, start),
+            lt(schema.vendorPayments.dateTime, end)
+          )
+        )
+        .groupBy(schema.vendorPayments.vendorName),
+      db
+        .select({
+          vendor: schema.expenses.paidTo,
+          total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
+        })
+        .from(schema.expenses)
+        .where(isNotNull(schema.expenses.paidTo))
+        .groupBy(schema.expenses.paidTo),
+      db
+        .select({
+          vendor: schema.vendorPayments.vendorName,
+          total: sql<number>`COALESCE(SUM(${schema.vendorPayments.amount}), 0)::float`,
+        })
+        .from(schema.vendorPayments)
+        .groupBy(schema.vendorPayments.vendorName),
+    ]);
+
+  const lifetimeExpense = new Map<string, number>();
+  for (const row of lifetimeExpenseRows) {
+    if (row.vendor && vendorNames.has(row.vendor)) {
+      lifetimeExpense.set(row.vendor, Number(row.total ?? 0));
+    }
+  }
+  const lifetimePaid = new Map<string, number>();
+  for (const row of lifetimePaymentRows) {
+    lifetimePaid.set(row.vendor, Number(row.total ?? 0));
+  }
+  const monthExpense = new Map<string, { total: number; count: number }>();
+  for (const row of monthExpenseRows) {
+    if (row.vendor && vendorNames.has(row.vendor)) {
+      monthExpense.set(row.vendor, { total: Number(row.total ?? 0), count: Number(row.count ?? 0) });
+    }
+  }
+  const monthPaid = new Map<string, { total: number; count: number }>();
+  for (const row of monthPaymentRows) {
+    monthPaid.set(row.vendor, { total: Number(row.total ?? 0), count: Number(row.count ?? 0) });
+  }
+
+  const list: VendorMonthlyPayable[] = [];
+  for (const vendor of vendorNames) {
+    const mExp = monthExpense.get(vendor) ?? { total: 0, count: 0 };
+    const mPaid = monthPaid.get(vendor) ?? { total: 0, count: 0 };
+    const totalPayable =
+      Math.round(((lifetimeExpense.get(vendor) ?? 0) - (lifetimePaid.get(vendor) ?? 0)) * 100) /
+      100;
+    const monthRemaining = Math.round((mExp.total - mPaid.total) * 100) / 100;
+    // Show vendors with activity in the window, or anything still pending
+    // from other periods (so old dues are never hidden).
+    if (mExp.total > 0 || mPaid.total > 0 || totalPayable > 0) {
+      list.push({
+        vendor,
+        monthExpensesTotal: mExp.total,
+        monthExpensesCount: mExp.count,
+        monthPaidTotal: mPaid.total,
+        monthPaymentsCount: mPaid.count,
+        monthRemaining,
+        totalPayable,
+      });
+    }
+  }
+  list.sort((a, b) => b.totalPayable - a.totalPayable || b.monthRemaining - a.monthRemaining);
+  return list;
+}
+
+async function registeredVendorNames(db: ReturnType<typeof getDb>): Promise<Set<string>> {
+  const vendorRows = await db.select({ name: schema.vendors.name }).from(schema.vendors);
+  return new Set(vendorRows.map((v) => v.name));
+}
+
 export const vendorPaymentsRouter = createRouter({
   // Per-vendor ledger: recorded expenses vs. payments actually made.
   list: authedQuery.query(async () => {
@@ -97,8 +206,7 @@ export const vendorPaymentsRouter = createRouter({
     return list;
   }),
 
-  // Per-vendor balances scoped to one calendar month (YYYY-MM), plus the
-  // lifetime "Total Payable" so previous months' dues stay visible.
+  // Per-vendor balances scoped to one calendar month (YYYY-MM).
   monthlySummary: authedQuery
     .input(z.object({ month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be YYYY-MM") }))
     .query(async ({ input }) => {
@@ -107,103 +215,27 @@ export const vendorPaymentsRouter = createRouter({
       const monthEnd = new Date(monthStart);
       monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1);
 
-      // Only registered vendors appear in the payable ledger.
-      const vendorRows = await db.select({ name: schema.vendors.name }).from(schema.vendors);
-      const vendorNames = new Set(vendorRows.map((v) => v.name));
+      const vendorNames = await registeredVendorNames(db);
+      return buildPayableList(db, vendorNames, monthStart, monthEnd);
+    }),
 
-      const [monthExpenseRows, monthPaymentRows, lifetimeExpenseRows, lifetimePaymentRows] =
-        await Promise.all([
-          db
-            .select({
-              vendor: schema.expenses.paidTo,
-              total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
-              count: sql<number>`COUNT(*)::int`,
-            })
-            .from(schema.expenses)
-            .where(
-              and(
-                isNotNull(schema.expenses.paidTo),
-                gte(schema.expenses.dateTime, monthStart),
-                lt(schema.expenses.dateTime, monthEnd)
-              )
-            )
-            .groupBy(schema.expenses.paidTo),
-          db
-            .select({
-              vendor: schema.vendorPayments.vendorName,
-              total: sql<number>`COALESCE(SUM(${schema.vendorPayments.amount}), 0)::float`,
-              count: sql<number>`COUNT(*)::int`,
-            })
-            .from(schema.vendorPayments)
-            .where(
-              and(
-                gte(schema.vendorPayments.dateTime, monthStart),
-                lt(schema.vendorPayments.dateTime, monthEnd)
-              )
-            )
-            .groupBy(schema.vendorPayments.vendorName),
-          db
-            .select({
-              vendor: schema.expenses.paidTo,
-              total: sql<number>`COALESCE(SUM(${schema.expenses.total}), 0)::float`,
-            })
-            .from(schema.expenses)
-            .where(isNotNull(schema.expenses.paidTo))
-            .groupBy(schema.expenses.paidTo),
-          db
-            .select({
-              vendor: schema.vendorPayments.vendorName,
-              total: sql<number>`COALESCE(SUM(${schema.vendorPayments.amount}), 0)::float`,
-            })
-            .from(schema.vendorPayments)
-            .groupBy(schema.vendorPayments.vendorName),
-        ]);
+  // Per-vendor balances for a custom inclusive date range (YYYY-MM-DD).
+  rangeSummary: authedQuery
+    .input(
+      z
+        .object({
+          from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "From must be YYYY-MM-DD"),
+          to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "To must be YYYY-MM-DD"),
+        })
+        .refine((v) => v.from <= v.to, { message: "From date must be on or before To date" })
+    )
+    .query(async ({ input }) => {
+      const db = getDb();
+      const start = new Date(`${input.from}T00:00:00.000Z`);
+      const end = new Date(`${input.to}T23:59:59.999Z`);
 
-      const lifetimeExpense = new Map<string, number>();
-      for (const row of lifetimeExpenseRows) {
-        if (row.vendor && vendorNames.has(row.vendor)) {
-          lifetimeExpense.set(row.vendor, Number(row.total ?? 0));
-        }
-      }
-      const lifetimePaid = new Map<string, number>();
-      for (const row of lifetimePaymentRows) {
-        lifetimePaid.set(row.vendor, Number(row.total ?? 0));
-      }
-      const monthExpense = new Map<string, { total: number; count: number }>();
-      for (const row of monthExpenseRows) {
-        if (row.vendor && vendorNames.has(row.vendor)) {
-          monthExpense.set(row.vendor, { total: Number(row.total ?? 0), count: Number(row.count ?? 0) });
-        }
-      }
-      const monthPaid = new Map<string, { total: number; count: number }>();
-      for (const row of monthPaymentRows) {
-        monthPaid.set(row.vendor, { total: Number(row.total ?? 0), count: Number(row.count ?? 0) });
-      }
-
-      const list: VendorMonthlyPayable[] = [];
-      for (const vendor of vendorNames) {
-        const mExp = monthExpense.get(vendor) ?? { total: 0, count: 0 };
-        const mPaid = monthPaid.get(vendor) ?? { total: 0, count: 0 };
-        const totalPayable =
-          Math.round(((lifetimeExpense.get(vendor) ?? 0) - (lifetimePaid.get(vendor) ?? 0)) * 100) /
-          100;
-        const monthRemaining = Math.round((mExp.total - mPaid.total) * 100) / 100;
-        // Show vendors with activity this month, or anything still pending
-        // from previous months (so old dues are never hidden).
-        if (mExp.total > 0 || mPaid.total > 0 || totalPayable > 0) {
-          list.push({
-            vendor,
-            monthExpensesTotal: mExp.total,
-            monthExpensesCount: mExp.count,
-            monthPaidTotal: mPaid.total,
-            monthPaymentsCount: mPaid.count,
-            monthRemaining,
-            totalPayable,
-          });
-        }
-      }
-      list.sort((a, b) => b.totalPayable - a.totalPayable || b.monthRemaining - a.monthRemaining);
-      return list;
+      const vendorNames = await registeredVendorNames(db);
+      return buildPayableList(db, vendorNames, start, end);
     }),
 
   create: authedQuery

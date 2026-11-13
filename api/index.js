@@ -1693,6 +1693,83 @@ var vendorsRouter = createRouter({
 import { z as z10 } from "zod";
 import { TRPCError as TRPCError4 } from "@trpc/server";
 import { sql as sql6, eq as eq7, desc as desc6, isNotNull, and as and5, gte as gte5, lt } from "drizzle-orm";
+async function buildPayableList(db, vendorNames, start, end) {
+  const [monthExpenseRows, monthPaymentRows, lifetimeExpenseRows, lifetimePaymentRows] = await Promise.all([
+    db.select({
+      vendor: expenses.paidTo,
+      total: sql6`COALESCE(SUM(${expenses.total}), 0)::float`,
+      count: sql6`COUNT(*)::int`
+    }).from(expenses).where(
+      and5(
+        isNotNull(expenses.paidTo),
+        gte5(expenses.dateTime, start),
+        lt(expenses.dateTime, end)
+      )
+    ).groupBy(expenses.paidTo),
+    db.select({
+      vendor: vendorPayments.vendorName,
+      total: sql6`COALESCE(SUM(${vendorPayments.amount}), 0)::float`,
+      count: sql6`COUNT(*)::int`
+    }).from(vendorPayments).where(
+      and5(
+        gte5(vendorPayments.dateTime, start),
+        lt(vendorPayments.dateTime, end)
+      )
+    ).groupBy(vendorPayments.vendorName),
+    db.select({
+      vendor: expenses.paidTo,
+      total: sql6`COALESCE(SUM(${expenses.total}), 0)::float`
+    }).from(expenses).where(isNotNull(expenses.paidTo)).groupBy(expenses.paidTo),
+    db.select({
+      vendor: vendorPayments.vendorName,
+      total: sql6`COALESCE(SUM(${vendorPayments.amount}), 0)::float`
+    }).from(vendorPayments).groupBy(vendorPayments.vendorName)
+  ]);
+  const lifetimeExpense = /* @__PURE__ */ new Map();
+  for (const row of lifetimeExpenseRows) {
+    if (row.vendor && vendorNames.has(row.vendor)) {
+      lifetimeExpense.set(row.vendor, Number(row.total ?? 0));
+    }
+  }
+  const lifetimePaid = /* @__PURE__ */ new Map();
+  for (const row of lifetimePaymentRows) {
+    lifetimePaid.set(row.vendor, Number(row.total ?? 0));
+  }
+  const monthExpense = /* @__PURE__ */ new Map();
+  for (const row of monthExpenseRows) {
+    if (row.vendor && vendorNames.has(row.vendor)) {
+      monthExpense.set(row.vendor, { total: Number(row.total ?? 0), count: Number(row.count ?? 0) });
+    }
+  }
+  const monthPaid = /* @__PURE__ */ new Map();
+  for (const row of monthPaymentRows) {
+    monthPaid.set(row.vendor, { total: Number(row.total ?? 0), count: Number(row.count ?? 0) });
+  }
+  const list = [];
+  for (const vendor of vendorNames) {
+    const mExp = monthExpense.get(vendor) ?? { total: 0, count: 0 };
+    const mPaid = monthPaid.get(vendor) ?? { total: 0, count: 0 };
+    const totalPayable = Math.round(((lifetimeExpense.get(vendor) ?? 0) - (lifetimePaid.get(vendor) ?? 0)) * 100) / 100;
+    const monthRemaining = Math.round((mExp.total - mPaid.total) * 100) / 100;
+    if (mExp.total > 0 || mPaid.total > 0 || totalPayable > 0) {
+      list.push({
+        vendor,
+        monthExpensesTotal: mExp.total,
+        monthExpensesCount: mExp.count,
+        monthPaidTotal: mPaid.total,
+        monthPaymentsCount: mPaid.count,
+        monthRemaining,
+        totalPayable
+      });
+    }
+  }
+  list.sort((a, b) => b.totalPayable - a.totalPayable || b.monthRemaining - a.monthRemaining);
+  return list;
+}
+async function registeredVendorNames(db) {
+  const vendorRows = await db.select({ name: vendors.name }).from(vendors);
+  return new Set(vendorRows.map((v) => v.name));
+}
 var vendorPaymentsRouter = createRouter({
   // Per-vendor ledger: recorded expenses vs. payments actually made.
   list: authedQuery.query(async () => {
@@ -1745,86 +1822,27 @@ var vendorPaymentsRouter = createRouter({
     list.sort((a, b) => b.remaining - a.remaining);
     return list;
   }),
-  // Per-vendor balances scoped to one calendar month (YYYY-MM), plus the
-  // lifetime "Total Payable" so previous months' dues stay visible.
+  // Per-vendor balances scoped to one calendar month (YYYY-MM).
   monthlySummary: authedQuery.input(z10.object({ month: z10.string().regex(/^\d{4}-\d{2}$/, "Month must be YYYY-MM") })).query(async ({ input }) => {
     const db = getDb();
     const monthStart = /* @__PURE__ */ new Date(`${input.month}-01T00:00:00.000Z`);
     const monthEnd = new Date(monthStart);
     monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1);
-    const vendorRows = await db.select({ name: vendors.name }).from(vendors);
-    const vendorNames = new Set(vendorRows.map((v) => v.name));
-    const [monthExpenseRows, monthPaymentRows, lifetimeExpenseRows, lifetimePaymentRows] = await Promise.all([
-      db.select({
-        vendor: expenses.paidTo,
-        total: sql6`COALESCE(SUM(${expenses.total}), 0)::float`,
-        count: sql6`COUNT(*)::int`
-      }).from(expenses).where(
-        and5(
-          isNotNull(expenses.paidTo),
-          gte5(expenses.dateTime, monthStart),
-          lt(expenses.dateTime, monthEnd)
-        )
-      ).groupBy(expenses.paidTo),
-      db.select({
-        vendor: vendorPayments.vendorName,
-        total: sql6`COALESCE(SUM(${vendorPayments.amount}), 0)::float`,
-        count: sql6`COUNT(*)::int`
-      }).from(vendorPayments).where(
-        and5(
-          gte5(vendorPayments.dateTime, monthStart),
-          lt(vendorPayments.dateTime, monthEnd)
-        )
-      ).groupBy(vendorPayments.vendorName),
-      db.select({
-        vendor: expenses.paidTo,
-        total: sql6`COALESCE(SUM(${expenses.total}), 0)::float`
-      }).from(expenses).where(isNotNull(expenses.paidTo)).groupBy(expenses.paidTo),
-      db.select({
-        vendor: vendorPayments.vendorName,
-        total: sql6`COALESCE(SUM(${vendorPayments.amount}), 0)::float`
-      }).from(vendorPayments).groupBy(vendorPayments.vendorName)
-    ]);
-    const lifetimeExpense = /* @__PURE__ */ new Map();
-    for (const row of lifetimeExpenseRows) {
-      if (row.vendor && vendorNames.has(row.vendor)) {
-        lifetimeExpense.set(row.vendor, Number(row.total ?? 0));
-      }
-    }
-    const lifetimePaid = /* @__PURE__ */ new Map();
-    for (const row of lifetimePaymentRows) {
-      lifetimePaid.set(row.vendor, Number(row.total ?? 0));
-    }
-    const monthExpense = /* @__PURE__ */ new Map();
-    for (const row of monthExpenseRows) {
-      if (row.vendor && vendorNames.has(row.vendor)) {
-        monthExpense.set(row.vendor, { total: Number(row.total ?? 0), count: Number(row.count ?? 0) });
-      }
-    }
-    const monthPaid = /* @__PURE__ */ new Map();
-    for (const row of monthPaymentRows) {
-      monthPaid.set(row.vendor, { total: Number(row.total ?? 0), count: Number(row.count ?? 0) });
-    }
-    const list = [];
-    for (const vendor of vendorNames) {
-      const mExp = monthExpense.get(vendor) ?? { total: 0, count: 0 };
-      const mPaid = monthPaid.get(vendor) ?? { total: 0, count: 0 };
-      const totalPayable = Math.round(((lifetimeExpense.get(vendor) ?? 0) - (lifetimePaid.get(vendor) ?? 0)) * 100) / 100;
-      const monthRemaining = Math.round((mExp.total - mPaid.total) * 100) / 100;
-      if (mExp.total > 0 || mPaid.total > 0 || totalPayable > 0) {
-        list.push({
-          vendor,
-          monthExpensesTotal: mExp.total,
-          monthExpensesCount: mExp.count,
-          monthPaidTotal: mPaid.total,
-          monthPaymentsCount: mPaid.count,
-          monthRemaining,
-          totalPayable
-        });
-      }
-    }
-    list.sort((a, b) => b.totalPayable - a.totalPayable || b.monthRemaining - a.monthRemaining);
-    return list;
+    const vendorNames = await registeredVendorNames(db);
+    return buildPayableList(db, vendorNames, monthStart, monthEnd);
+  }),
+  // Per-vendor balances for a custom inclusive date range (YYYY-MM-DD).
+  rangeSummary: authedQuery.input(
+    z10.object({
+      from: z10.string().regex(/^\d{4}-\d{2}-\d{2}$/, "From must be YYYY-MM-DD"),
+      to: z10.string().regex(/^\d{4}-\d{2}-\d{2}$/, "To must be YYYY-MM-DD")
+    }).refine((v) => v.from <= v.to, { message: "From date must be on or before To date" })
+  ).query(async ({ input }) => {
+    const db = getDb();
+    const start = /* @__PURE__ */ new Date(`${input.from}T00:00:00.000Z`);
+    const end = /* @__PURE__ */ new Date(`${input.to}T23:59:59.999Z`);
+    const vendorNames = await registeredVendorNames(db);
+    return buildPayableList(db, vendorNames, start, end);
   }),
   create: authedQuery.input(
     z10.object({
